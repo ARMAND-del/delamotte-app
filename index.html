@@ -454,6 +454,22 @@ const db = firebase.firestore();
 
 <!-- COMMENT MODAL -->
 <!-- DELIVERY DATE MODAL -->
+<!-- EDIT ORDER MODAL -->
+<div id="editOrderModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:540px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="color:#2980b9;font-size:1rem;">✏️ Modifier la commande <span id="editOrderId"></span></h3>
+      <button onclick="closeEditOrderModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:12px;">Modifiez les quantités ou supprimez des articles.</p>
+    <div id="editOrderItems"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button onclick="closeEditOrderModal()" style="flex:1;padding:12px;background:var(--gray);border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;color:var(--text);">Annuler</button>
+      <button onclick="saveEditOrder()" style="flex:2;padding:12px;background:#2980b9;color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:pointer;">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div id="deliveryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:16px;">
   <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -573,6 +589,20 @@ const db = firebase.firestore();
         <option value="">-- Sélectionner un chantier *--</option>
       </select>
       <input type="text" id="cartChef" placeholder="Chef de chantier *">
+      <!-- Lieu de livraison -->
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <label style="flex:1;cursor:pointer;">
+          <div id="livraisonEntreprise" onclick="setLivraison('entreprise')" style="padding:10px;border:2px solid var(--blue);border-radius:8px;text-align:center;font-size:0.85rem;font-weight:700;color:var(--blue);background:var(--blue-light);">
+            🏭 Entreprise
+          </div>
+        </label>
+        <label style="flex:1;cursor:pointer;">
+          <div id="livraisonChantier" onclick="setLivraison('chantier')" style="padding:10px;border:2px solid var(--border);border-radius:8px;text-align:center;font-size:0.85rem;font-weight:700;color:var(--muted);background:var(--white);">
+            🏗️ Chantier
+          </div>
+        </label>
+      </div>
+      <input type="hidden" id="cartLivraison" value="entreprise">
       <textarea id="cartComment" rows="2" placeholder="Commentaire (optionnel)"></textarea>
     </div>
     <div class="cart-items" id="cartItems"></div>
@@ -4626,6 +4656,19 @@ function renderCartItems(){
   }).join('');
 }
 function removeFromCart(i){cart.splice(i,1);renderCartItems();updateCartCount();}
+function setLivraison(val){
+  document.getElementById('cartLivraison').value=val;
+  const ent=document.getElementById('livraisonEntreprise');
+  const chan=document.getElementById('livraisonChantier');
+  if(val==='entreprise'){
+    ent.style.borderColor='var(--blue)';ent.style.color='var(--blue)';ent.style.background='var(--blue-light)';
+    chan.style.borderColor='var(--border)';chan.style.color='var(--muted)';chan.style.background='var(--white)';
+  } else {
+    chan.style.borderColor='var(--blue)';chan.style.color='var(--blue)';chan.style.background='var(--blue-light)';
+    ent.style.borderColor='var(--border)';ent.style.color='var(--muted)';ent.style.background='var(--white)';
+  }
+}
+
 function sendOrder(){
   const chantier=document.getElementById('cartChantier').value.trim();
   const chef=currentRole==='admin'?document.getElementById('cartChef').value.trim():currentUser;
@@ -4636,7 +4679,8 @@ function sendOrder(){
   db.collection('meta').doc('counter').get().then(doc=>{
     const current=(doc.exists?doc.data().count:0)+1;
     const id='CMD-'+String(current).padStart(4,'0');
-    const order={id,chantier,chef:chef||currentUser,date,comment,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
+    const livraison=document.getElementById('cartLivraison')?.value||'entreprise';
+    const order={id,chantier,chef:chef||currentUser,date,comment,livraison,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
     const batch=db.batch();
     batch.set(db.collection('orders').doc(id),order);
     batch.set(db.collection('meta').doc('counter'),{count:current});
@@ -4651,6 +4695,7 @@ function sendOrder(){
     cart=[];updateCartCount();
     document.getElementById('cartChantier').value='';
     document.getElementById('cartComment').value='';
+    setLivraison('entreprise');
     closeCart();showToast('Commande '+id+' envoyée !');
   }).catch(()=>showToast('Erreur envoi commande'));
 }
@@ -4709,7 +4754,7 @@ function renderOrders(){
         <span class="order-id">${o.id}</span>
         <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitee':'En attente'}</span>
       </div>
-      <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date}</div>
+      <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
       ${o.dateLivraison?`<div class="order-info" style="color:var(--green);font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
       <div class="order-actions">
@@ -4717,12 +4762,66 @@ function renderOrders(){
         <button class="btn-print" style="background:var(--muted)" onclick="openCommentModal('${o.id}')">💬 Commentaires</button>
         ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-print" style="background:#8e44ad" onclick="openStockModal('${o.id}')">📦 Bon fournisseur</button>`:''}
         ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-done" onclick="markDone('${o.id}')">Traitee</button>`:''}
+        ${currentRole==='admin'&&o.status==='done'?`<button class="btn-print" style="background:var(--orange)" onclick="reopenOrder('${o.id}')">↩️ Remettre en attente</button>`:''}
+        ${currentRole==='admin'&&o.status==='done'?`<button class="btn-print" style="background:#2980b9" onclick="openEditOrderModal('${o.id}')">✏️ Modifier</button>`:''}
         ${currentRole==='admin'?`<button class="btn-del" onclick="deleteOrder('${o.id}')">Supprimer</button>`:''}
       </div>
     </div>`).join('');
 }
 function setFilter(f){orderFilter=f;renderOrders();}
 let pendingMarkDoneId=null;
+function reopenOrder(id){
+  if(!confirm('Remettre cette commande en attente ?')) return;
+  db.collection('orders').doc(id).update({status:'pending',dateLivraison:'',dateLivraisonISO:''})
+    .then(()=>showToast('Commande remise en attente ↩️'))
+    .catch(()=>showToast('Erreur'));
+}
+
+let editingOrderId=null;
+function openEditOrderModal(id){
+  const order=getOrders().find(o=>o.id===id);
+  if(!order) return;
+  editingOrderId=id;
+  document.getElementById('editOrderId').textContent=id;
+  document.getElementById('editOrderItems').innerHTML=order.items.map((item,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);" id="editrow_${i}">
+      <div style="flex:1;font-size:0.82rem;">
+        <span style="color:var(--muted);font-size:0.72rem">${item.code}</span><br>
+        <span style="font-weight:600">${item.nom}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:0.78rem;color:var(--muted)">Qté:</label>
+        <input type="number" id="editqty_${i}" value="${item.qty}" min="0"
+          style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-size:0.85rem;background:var(--white);color:var(--text);">
+      </div>
+      <button onclick="removeEditRow(${i})" style="background:var(--red);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:0.8rem;">✕</button>
+    </div>`).join('');
+  document.getElementById('editOrderModal').style.display='flex';
+}
+function removeEditRow(i){
+  const row=document.getElementById('editrow_'+i);
+  if(row) row.remove();
+}
+function closeEditOrderModal(){
+  document.getElementById('editOrderModal').style.display='none';
+  editingOrderId=null;
+}
+function saveEditOrder(){
+  const order=getOrders().find(o=>o.id===editingOrderId);
+  if(!order) return;
+  const newItems=order.items.map((item,i)=>{
+    const row=document.getElementById('editrow_'+i);
+    if(!row) return null; // supprimé
+    const qty=parseInt(document.getElementById('editqty_'+i)?.value)||0;
+    if(qty<=0) return null;
+    return {...item,qty};
+  }).filter(Boolean);
+  if(!newItems.length){showToast('La commande doit contenir au moins un article');return;}
+  db.collection('orders').doc(editingOrderId).update({items:newItems})
+    .then(()=>{showToast('Commande modifiée ✅');closeEditOrderModal();})
+    .catch(()=>showToast('Erreur'));
+}
+
 function markDone(id){
   const order=getOrders().find(o=>o.id===id);
   if(!order) return;
