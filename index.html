@@ -4196,7 +4196,7 @@ const IMG_MAP={
 function imgPath(n,code){
   const num=IMG_MAP[code];
   if(!num) return null;
-  return 'media/image'+num+'.png';
+  return 'image'+num+'.png';
 }
 
 let currentUser=null,currentRole=null,cart=[],currentCat='Toutes',orderFilter='all';
@@ -4615,7 +4615,7 @@ function renderCartItems(){
   el.innerHTML=cart.map((item,i)=>{
     const imgNum=IMG_MAP[item.code];
     const imgHtml=imgNum
-      ? `<img class="cart-item-img" src="media/image${imgNum}.png" alt="${item.nom}" onerror="this.outerHTML='<div class=cart-item-img-placeholder>📦</div>'">`
+      ? `<img class="cart-item-img" src="image${imgNum}.png" alt="${item.nom}" onerror="this.outerHTML='<div class=cart-item-img-placeholder>📦</div>'">`
       : `<div class="cart-item-img-placeholder">📦</div>`;
     return `<div class="cart-item">
       ${imgHtml}
