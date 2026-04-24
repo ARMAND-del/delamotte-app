@@ -5173,7 +5173,10 @@ function renderReappro(){
   const nbEnCommande=Object.keys(reapproCommandeCache).length;
 
   if(!fournList.length && !nbEnCommande){
-    el.innerHTML='<div style="text-align:center;color:var(--muted);padding:40px">✅ Aucun article à réapprovisionner</div>';
+    el.innerHTML=`<div style="text-align:center;color:var(--muted);padding:40px">✅ Aucun article à réapprovisionner</div>
+    <div style="text-align:center;margin-top:10px">
+      <button onclick="renderHistoriqueCommandes()" style="padding:10px 20px;background:#8e44ad;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">📜 Voir l'historique des commandes</button>
+    </div>`;
     return;
   }
 
@@ -5189,6 +5192,7 @@ function renderReappro(){
     <div style="flex:1;font-size:0.85rem;color:var(--muted)">${fournList.length} fournisseur(s) à commander</div>
     ${nbEnCommande>0?`<div style="background:#fff3cd;border-radius:8px;padding:8px 12px;font-size:0.82rem;color:#856404">⏳ ${nbEnCommande} réf. en attente de réception</div>`:''}
     ${fournList.length?`<button class="btn-reappro" onclick="exportReapproAll()">📥 Exporter tout</button>`:''}
+    <button onclick="renderHistoriqueCommandes()" style="padding:8px 14px;background:#8e44ad;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📜 Historique</button>
   </div>`;
 
   // EN COMMANDE section
@@ -5256,17 +5260,30 @@ function passerCommandeFourn(fourn, batigestId){
   const data=buildReapproData();
   const articles=data[fourn];
   if(!articles||!Object.keys(articles).length){showToast('Aucun article à commander');return;}
-  // Save to Firebase as "en commande"
+  const now=new Date().toISOString();
+  const today=new Date().toLocaleDateString('fr-FR');
   const batch=db.batch();
+  // Save to en_commande
   Object.entries(articles).forEach(([code,a])=>{
     batch.set(db.collection('reappro_commande').doc(code),{
       code,nom:a.nom,fournisseur:fourn,codeFourn:a.codeFourn,
       qtyEnCommande:a.totalQty,batigest,
-      commandeDate:new Date().toISOString()
+      commandeDate:now
     });
   });
+  // Archive in historique_commandes
+  const histId=batigest+'_'+fourn.replace(/\W/g,'')+'_'+Date.now();
+  const histData={
+    batigest, fournisseur:fourn, date:today, dateISO:now,
+    statut:'en_attente',
+    articles:Object.entries(articles).map(([code,a])=>({
+      code,nom:a.nom,codeFourn:a.codeFourn,prix:a.prix,
+      qtyCommandee:a.totalQty,qtyRecue:0,
+      chantiers:a.chantiers
+    }))
+  };
+  batch.set(db.collection('historique_commandes').doc(histId), histData);
   batch.commit().then(()=>{
-    // Export Excel
     exportReapproFournAvecBatigest(fourn,articles,batigest);
     showToast(`Commande ${fourn} passée ✅ — N° Batigest: ${batigest}`);
   }).catch(()=>showToast('Erreur Firebase'));
@@ -5388,21 +5405,97 @@ function confirmReception(){
   if(!pendingReceptionData) return;
   const batch=db.batch();
   let count=0;
+  const receptionsParFourn={};
   Object.entries(pendingReceptionData).forEach(([code,a],i)=>{
     const qtyRecu=parseInt(document.getElementById('rec_'+i)?.value)||0;
     if(qtyRecu>0){
-      // Add to stock
       const current=stockCache[code]||0;
       batch.set(db.collection('stock').doc(code),{qty:current+qtyRecu,updatedAt:new Date().toISOString()});
-      // Remove from reappro_commande (Firebase)
       batch.delete(db.collection('reappro_commande').doc(code));
+      const fourn=a.fournisseur||pendingReceptionFourn||'';
+      if(!receptionsParFourn[fourn]) receptionsParFourn[fourn]=[];
+      receptionsParFourn[fourn].push({code,nom:a.nom,qtyRecu,batigest:a.batigest||''});
       count++;
     }
+  });
+  // Archive réception in historique
+  const now=new Date().toISOString();
+  const today=new Date().toLocaleDateString('fr-FR');
+  Object.entries(receptionsParFourn).forEach(([fourn,items])=>{
+    const batigest=items[0]?.batigest||'';
+    const histId='REC_'+(batigest||fourn.replace(/\W/g,''))+'_'+Date.now();
+    batch.set(db.collection('historique_commandes').doc(histId),{
+      batigest,fournisseur:fourn,date:today,dateISO:now,
+      statut:'recu',
+      articles:items.map(it=>({code:it.code,nom:it.nom,codeFourn:'',prix:0,qtyCommandee:it.qtyRecu,qtyRecue:it.qtyRecu,chantiers:{}}))
+    });
   });
   batch.commit().then(()=>{
     showToast(`Réception confirmée ✅ — ${count} référence(s) ajoutées au stock`);
     closeReceptionModal();
   }).catch(()=>showToast('Erreur'));
+}
+
+function renderHistoriqueCommandes(){
+  const el=document.getElementById('reapproContent');
+  el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px">Chargement...</div>';
+  db.collection('historique_commandes').orderBy('dateISO','desc').limit(200).get()
+    .then(snap=>{
+      if(snap.empty){
+        el.innerHTML=`<button onclick="renderReappro()" style="margin-bottom:16px;padding:8px 16px;background:var(--gray);border:none;border-radius:8px;cursor:pointer;color:var(--text);">← Retour</button>
+        <div style="text-align:center;color:var(--muted);padding:40px">📭 Aucun historique</div>`;
+        return;
+      }
+      const docs=snap.docs.map(d=>({id:d.id,...d.data()}));
+      // Group by batigest+fournisseur
+      let html=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+        <button onclick="renderReappro()" style="padding:8px 16px;background:var(--gray);border:none;border-radius:8px;cursor:pointer;color:var(--text);">← Retour Réappro</button>
+        <h3 style="margin:0;color:#8e44ad">📜 Historique commandes fournisseurs</h3>
+      </div>`;
+      docs.forEach(doc=>{
+        const statutBadge=doc.statut==='recu'
+          ?'<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:700">✅ Reçu</span>'
+          :'<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:0.75rem;font-weight:700">⏳ En attente</span>';
+        const totalHT=(doc.articles||[]).reduce((s,a)=>s+(a.qtyCommandee||0)*(a.prix||0),0);
+        const id='hist_'+doc.id.replace(/\W/g,'_');
+        html+=`<div style="background:var(--white);border-radius:12px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);overflow:hidden;">
+          <div style="padding:12px 16px;background:#f3e5f5;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleReapproFourn('${id}')">
+            <div>
+              <span style="font-weight:700;color:#6a1b9a">${doc.fournisseur}</span>
+              <span style="margin-left:10px;font-size:0.82rem;color:var(--muted)">${doc.date}</span>
+              ${doc.batigest?`<span style="margin-left:10px;font-size:0.82rem;font-weight:700;color:#8e44ad">Batigest: ${doc.batigest}</span>`:''}
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              ${statutBadge}
+              ${totalHT>0?`<span style="font-size:0.82rem;font-weight:700">${totalHT.toFixed(2)} € HT</span>`:''}
+            </div>
+          </div>
+          <div class="reappro-fourn-body" id="${id}">
+            <table class="reappro-table" style="margin:12px 16px;width:calc(100% - 32px)">
+              <thead><tr><th>Code</th><th>Désignation</th><th>Code fourn.</th><th>Chantier(s)</th><th>Qté</th><th>Prix U.</th><th>Total HT</th></tr></thead>
+              <tbody>
+                ${(doc.articles||[]).map(a=>{
+                  const chStr=a.chantiers?Object.entries(a.chantiers).map(([c,q])=>c+': '+q).join('<br>'):'';
+                  return '<tr><td style="font-size:0.75rem;color:var(--muted)">'+a.code+'</td>'
+                    +'<td>'+a.nom+'</td>'
+                    +'<td style="font-size:0.75rem">'+(a.codeFourn||'')+'</td>'
+                    +'<td style="font-size:0.75rem">'+chStr+'</td>'
+                    +'<td style="text-align:center;font-weight:700">'+(a.qtyCommandee||0)+'</td>'
+                    +'<td style="text-align:right">'+(a.prix>0?a.prix.toFixed(2)+' €':'-')+'</td>'
+                    +'<td style="text-align:right">'+(a.prix>0?((a.qtyCommandee||0)*a.prix).toFixed(2)+' €':'-')+'</td>'
+                    +'</tr>';
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+      });
+      el.innerHTML=html;
+    })
+    .catch(()=>{
+      el.innerHTML=`<button onclick="renderReappro()" style="margin-bottom:16px;padding:8px 16px;background:var(--gray);border:none;border-radius:8px;cursor:pointer;">← Retour</button>
+      <div style="text-align:center;color:var(--red);padding:20px">Erreur de chargement</div>`;
+    });
 }
 
 function openBatigestModal(){
