@@ -4289,6 +4289,8 @@ function startSession(u){
   listenStock();
   if(perms.reappro) listenReapproCommande();
   loadRefsFournFromFirebase();
+  // Restore saved cart
+  setTimeout(loadCart, 800);
 }
 function getExtraUsers(){try{return JSON.parse(localStorage.getItem('delamotte_extra_users')||'{}');}catch{return{};}}
 function saveExtraUsers(u){localStorage.setItem('delamotte_extra_users',JSON.stringify(u));}
@@ -4618,6 +4620,40 @@ function filterProducts(){
   }).join('');
 }
 function changeQty(code,d){const i=document.getElementById('qty_'+code);if(i)i.value=Math.max(1,(parseInt(i.value)||1)+d);}
+function saveCart(){
+  localStorage.setItem('delamotte_cart_'+currentUser, JSON.stringify({
+    cart,
+    chantier:document.getElementById('cartChantier')?.value||'',
+    livraison:document.getElementById('cartLivraison')?.value||'entreprise',
+    comment:document.getElementById('cartComment')?.value||''
+  }));
+}
+function loadCart(){
+  try{
+    const saved=localStorage.getItem('delamotte_cart_'+currentUser);
+    if(!saved) return;
+    const data=JSON.parse(saved);
+    cart=data.cart||[];
+    updateCartCount();
+    if(data.chantier) setTimeout(()=>{
+      const sel=document.getElementById('cartChantier');
+      if(sel) sel.value=data.chantier;
+    },500);
+    if(data.livraison) setTimeout(()=>setLivraison(data.livraison),500);
+    if(data.comment) setTimeout(()=>{
+      const el=document.getElementById('cartComment');
+      if(el) el.value=data.comment;
+    },500);
+  }catch(e){}
+}
+function clearCart(){
+  cart=[];updateCartCount();
+  document.getElementById('cartChantier').value='';
+  document.getElementById('cartComment').value='';
+  setLivraison('entreprise');
+  localStorage.removeItem('delamotte_cart_'+currentUser);
+}
+
 function addToCart(code,nom){
   const i=document.getElementById('qty_'+code);
   const qty=i?Math.max(1,parseInt(i.value)||1):1;
@@ -4626,6 +4662,7 @@ function addToCart(code,nom){
   updateCartCount();showToast('\u2705 '+nom+' ajoute (x'+qty+')');
   animateCartBtn();
   if(i)i.value=1;
+  saveCart();
 }
 function updateCartCount(){
   const total=cart.reduce((s,i)=>s+i.qty,0);
@@ -4655,7 +4692,7 @@ function renderCartItems(){
     </div>`;
   }).join('');
 }
-function removeFromCart(i){cart.splice(i,1);renderCartItems();updateCartCount();}
+function removeFromCart(i){cart.splice(i,1);renderCartItems();updateCartCount();saveCart();}
 function setLivraison(val){
   document.getElementById('cartLivraison').value=val;
   const ent=document.getElementById('livraisonEntreprise');
@@ -4693,9 +4730,7 @@ function sendOrder(){
       total_refs:cart.length,to_email:EMAIL_MAGASIN
     }).catch(()=>{});
     cart=[];updateCartCount();
-    document.getElementById('cartChantier').value='';
-    document.getElementById('cartComment').value='';
-    setLivraison('entreprise');
+    clearCart();
     closeCart();showToast('Commande '+id+' envoyée !');
   }).catch(()=>showToast('Erreur envoi commande'));
 }
@@ -4709,11 +4744,10 @@ function listenOrders(){
   });
 }
 function getVisibleOrders(all){
-  if(currentRole==='admin') return all;
+  if(currentRole==='admin'||currentRole==='comptable') return all;
   if(currentRole==='conducteur'){
-    const chantiersFull=getChantiersFull();
-    const myChantiers=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
-    return all.filter(o=>myChantiers.includes(o.chantier));
+    // Conducteur voit toutes les commandes (peut commander sur tous les chantiers)
+    return all;
   }
   return all.filter(o=>o.user===currentUser);
 }
@@ -5065,7 +5099,8 @@ function renderSuivi(){
   } else if(currentRole==='conducteur'){
     const chantiersFull=getChantiersFull();
     const myChantiers=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
-    orders=all.filter(o=>myChantiers.includes(o.chantier));
+    // Ses propres commandes + commandes sur ses chantiers
+    orders=all.filter(o=>o.user===currentUser||myChantiers.includes(o.chantier));
   }
 
   if(!orders.length){el.innerHTML='<div class="suivi-empty">📭 Aucune commande pour le moment</div>';return;}
