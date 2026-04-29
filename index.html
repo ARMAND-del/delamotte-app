@@ -4480,14 +4480,8 @@ function updateChantierSelect(){
   const list=getChantiers();
   const current=sel.value;
   sel.innerHTML='<option value="">-- Sélectionner un chantier * --</option>';
-  // Filter chantiers by role
-  const chantiersFull=getChantiersFull();
+  // Tous les rôles voient tous les chantiers pour passer commande
   list.forEach(name=>{
-    // conducteur only sees their chantiers
-    if(currentRole==='conducteur'){
-      const c=chantiersFull.find(x=>x.name===name);
-      if(!c||c.conducteur!==currentUser)return;
-    }
     const opt=document.createElement('option');
     opt.value=name;opt.textContent=name;
     if(name===current)opt.selected=true;
