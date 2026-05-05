@@ -524,6 +524,55 @@ const db = firebase.firestore();
   </div>
 </div>
 
+<!-- CUSTOM REF MODAL -->
+<div id="customRefModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="color:var(--blue);font-size:1rem;" id="customRefModalTitle">➕ Ajouter une référence</h3>
+      <button onclick="closeCustomRefModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Code référence *</label>
+        <input type="text" id="crefCode" placeholder="Ex: 200050" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);margin-top:4px;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Désignation *</label>
+        <input type="text" id="crefNom" placeholder="Nom de l'article" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);margin-top:4px;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Catégorie *</label>
+        <select id="crefCat" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);margin-top:4px;">
+          <option value="">-- Choisir une catégorie --</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Fournisseur</label>
+        <input type="text" id="crefFourn" placeholder="Ex: LEGALLAIS" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);margin-top:4px;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Code fournisseur</label>
+        <input type="text" id="crefCodeFourn" placeholder="Ex: 698869" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);margin-top:4px;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Prix unitaire HT (€)</label>
+        <input type="number" id="crefPrix" placeholder="Ex: 12.50" step="0.01" min="0" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);margin-top:4px;">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted)">Photo de l'article</label>
+        <div id="crefImgPreview" style="width:100%;height:120px;border:2px dashed var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;margin-top:4px;cursor:pointer;overflow:hidden;" onclick="document.getElementById('crefImgInput').click()">
+          <span style="color:var(--muted);font-size:0.85rem">📷 Cliquer pour ajouter une photo</span>
+        </div>
+        <input type="file" id="crefImgInput" accept="image/*" style="display:none" onchange="previewCustomRefImg(event)">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button onclick="closeCustomRefModal()" style="flex:1;padding:12px;background:var(--gray);border:none;border-radius:8px;cursor:pointer;color:var(--text);">Annuler</button>
+      <button onclick="saveCustomRef()" style="flex:2;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div id="batigestModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:16px;">
   <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -4224,9 +4273,28 @@ const IMG_MAP={
 };
 
 function imgPath(n,code){
+  // Check custom images first (Firebase stored)
+  if(customImagesCache[code]) return customImagesCache[code];
   const num=IMG_MAP[code];
   if(!num) return null;
   return 'image'+num+'.png';
+}
+
+let customImagesCache={}; // code -> base64 data URL
+let customRefsCache=[]; // [{code,nom,cat}]
+
+function listenCustomRefs(){
+  db.collection('custom_refs').onSnapshot(snap=>{
+    customRefsCache=[];
+    customImagesCache={};
+    snap.docs.forEach(d=>{
+      const data=d.data();
+      customRefsCache.push({code:data.code,nom:data.nom,cat:data.cat});
+      if(data.image) customImagesCache[data.code]=data.image;
+    });
+    buildCatalogue();
+    if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
+  });
 }
 
 let currentUser=null,currentRole=null,cart=[],currentCat='Toutes',orderFilter='all';
@@ -4289,6 +4357,7 @@ function startSession(u){
   listenStock();
   if(perms.reappro) listenReapproCommande();
   loadRefsFournFromFirebase();
+  listenCustomRefs();
   // Restore saved cart
   setTimeout(loadCart, 800);
 }
@@ -4587,7 +4656,8 @@ function setCat(c){
 }
 function filterProducts(){
   const q=document.getElementById('searchInput').value.toLowerCase();
-  const items=CATALOGUE.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||p.code.toLowerCase().includes(q)||p.nom.toLowerCase().includes(q)));
+  const allItems=[...CATALOGUE,...customRefsCache];
+  const items=allItems.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||p.code.toLowerCase().includes(q)||p.nom.toLowerCase().includes(q)));
   const g=document.getElementById('productsGrid');
   const countEl=document.getElementById('searchCount');
   if(countEl) countEl.textContent=q||currentCat!=='Toutes'?`${items.length} article(s) trouvé(s)`:'';
@@ -5941,7 +6011,8 @@ function saveStockItem(code, qty){
 function renderInventaire(){
   const el=document.getElementById('inventaireContent');
   const cats=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
-  let filtered=CATALOGUE.filter(p=>{
+  const allItems=[...CATALOGUE,...customRefsCache];
+  let filtered=allItems.filter(p=>{
     const matchCat=invCat==='Toutes'||p.cat===invCat;
     const matchSearch=!invFilter||p.code.toLowerCase().includes(invFilter)||p.nom.toLowerCase().includes(invFilter.toLowerCase());
     return matchCat&&matchSearch;
@@ -5968,6 +6039,7 @@ function renderInventaire(){
         Alerte: <input class="inv-seuil-input" type="number" min="0" value="${invSeuilAlerte}" onchange="invSeuilAlerte=parseInt(this.value)||0;renderInventaire()">
       </div>
       <button onclick="exportStockExcel()" style="padding:8px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📥 Export stock</button>
+      <button onclick="openCustomRefModal()" style="padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">➕ Nouvelle référence</button>
       <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
         🔄 Maj prix/fournisseurs
         <input type="file" accept=".xlsx" style="display:none" onchange="importRefsFourn(event)">
@@ -5976,15 +6048,16 @@ function renderInventaire(){
     <div style="overflow-x:auto">
       <table class="inv-table">
         <thead><tr>
-          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock</th><th style="text-align:center">État</th>
+          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock</th><th style="text-align:center">État</th><th></th>
         </tr></thead>
         <tbody>
           ${filtered.map(p=>{
             const qty=stockCache[p.code]||0;
             const etat=qty>invSeuilAlerte?'ok':qty>0?'low':'zero';
             const badge=etat==='ok'?`<span class="stock-badge stock-ok">✅ ${qty}</span>`:etat==='low'?`<span class="stock-badge stock-low">⚠️ ${qty}</span>`:`<span class="stock-badge stock-zero">❌ 0</span>`;
+            const isCustom=customRefsCache.some(r=>r.code===p.code);
             return `<tr>
-              <td style="font-size:0.75rem;color:var(--muted)">${p.code}</td>
+              <td style="font-size:0.75rem;color:var(--muted)">${p.code}${isCustom?' <span style="background:#e3f2fd;color:var(--blue);font-size:0.65rem;padding:1px 5px;border-radius:8px">✏️</span>':''}</td>
               <td>${p.nom}</td>
               <td style="font-size:0.75rem">${p.cat}</td>
               <td style="text-align:center">
@@ -5993,11 +6066,122 @@ function renderInventaire(){
                   onblur="this.style.borderColor=''">
               </td>
               <td style="text-align:center">${badge}</td>
+              <td style="text-align:center;white-space:nowrap">
+                ${isCustom?`<button onclick="openCustomRefModal('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button>
+                <button onclick="deleteCustomRef('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>`:''}
+              </td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
     </div>`;
+}
+
+// ===== RÉFÉRENCES PERSONNALISÉES =====
+let editingCustomRefCode=null;
+let crefImgData=null;
+
+function openCustomRefModal(editCode){
+  editingCustomRefCode=editCode||null;
+  crefImgData=null;
+  // Populate categories
+  const cats=[...new Set(CATALOGUE.map(p=>p.cat))].sort();
+  document.getElementById('crefCat').innerHTML='<option value="">-- Choisir une catégorie --</option>'
+    +cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  // Reset form
+  document.getElementById('crefCode').value='';
+  document.getElementById('crefNom').value='';
+  document.getElementById('crefCat').value='';
+  document.getElementById('crefFourn').value='';
+  document.getElementById('crefCodeFourn').value='';
+  document.getElementById('crefPrix').value='';
+  document.getElementById('crefImgPreview').innerHTML='<span style="color:var(--muted);font-size:0.85rem">📷 Cliquer pour ajouter une photo</span>';
+  document.getElementById('crefCode').disabled=false;
+
+  if(editCode){
+    document.getElementById('customRefModalTitle').textContent='✏️ Modifier la référence';
+    // Load existing data
+    db.collection('custom_refs').doc(editCode).get().then(doc=>{
+      if(doc.exists){
+        const d=doc.data();
+        document.getElementById('crefCode').value=d.code;
+        document.getElementById('crefCode').disabled=true;
+        document.getElementById('crefNom').value=d.nom;
+        document.getElementById('crefCat').value=d.cat;
+        document.getElementById('crefFourn').value=d.fournisseur||'';
+        document.getElementById('crefCodeFourn').value=d.code_fourn||'';
+        document.getElementById('crefPrix').value=d.prix||'';
+        if(d.image){
+          crefImgData=d.image;
+          document.getElementById('crefImgPreview').innerHTML=`<img src="${d.image}" style="max-height:116px;max-width:100%;object-fit:contain;">`;
+        }
+      }
+    });
+  } else {
+    document.getElementById('customRefModalTitle').textContent='➕ Ajouter une référence';
+  }
+  document.getElementById('customRefModal').style.display='flex';
+}
+
+function closeCustomRefModal(){
+  document.getElementById('customRefModal').style.display='none';
+  editingCustomRefCode=null;
+  crefImgData=null;
+}
+
+function previewCustomRefImg(event){
+  const file=event.target.files[0];
+  if(!file) return;
+  // Resize image before storing
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const canvas=document.createElement('canvas');
+      const MAX=400;
+      let w=img.width,h=img.height;
+      if(w>h){if(w>MAX){h=h*MAX/w;w=MAX;}}else{if(h>MAX){w=w*MAX/h;h=MAX;}}
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      crefImgData=canvas.toDataURL('image/jpeg',0.8);
+      document.getElementById('crefImgPreview').innerHTML=`<img src="${crefImgData}" style="max-height:116px;max-width:100%;object-fit:contain;">`;
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveCustomRef(){
+  const code=document.getElementById('crefCode').value.trim();
+  const nom=document.getElementById('crefNom').value.trim();
+  const cat=document.getElementById('crefCat').value;
+  const fourn=document.getElementById('crefFourn').value.trim();
+  const codeFourn=document.getElementById('crefCodeFourn').value.trim();
+  const prix=document.getElementById('crefPrix').value.trim();
+  if(!code||!nom||!cat){showToast('Code, désignation et catégorie sont obligatoires');return;}
+  // Check code not already in CATALOGUE
+  if(!editingCustomRefCode && CATALOGUE.find(p=>p.code===code)){
+    showToast('Ce code existe déjà dans le catalogue !');return;
+  }
+  const data={code,nom,cat,fournisseur:fourn,code_fourn:codeFourn,prix,createdAt:new Date().toISOString()};
+  if(crefImgData) data.image=crefImgData;
+  db.collection('custom_refs').doc(code).set(data)
+    .then(()=>{
+      // Also update REFS_FOURN
+      if(fourn||codeFourn||prix){
+        REFS_FOURN[code]={fournisseur:fourn,code_fourn:codeFourn,prix};
+      }
+      showToast(editingCustomRefCode?'Référence modifiée ✅':'Référence ajoutée ✅');
+      closeCustomRefModal();
+    })
+    .catch(()=>showToast('Erreur sauvegarde'));
+}
+
+function deleteCustomRef(code){
+  if(!confirm(`Supprimer la référence ${code} ?`)) return;
+  db.collection('custom_refs').doc(code).delete()
+    .then(()=>showToast('Référence supprimée 🗑️'))
+    .catch(()=>showToast('Erreur'));
 }
 
 function exportStockExcel(){
