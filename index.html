@@ -6025,9 +6025,8 @@ function renderInventaire(){
   const enStock=CATALOGUE.filter(p=>stockCache[p.code]>invSeuilAlerte).length;
 
   // Valeur totale du stock
-  const allItems=[...CATALOGUE,...customRefsCache];
   let valeurStock=0;
-  allItems.forEach(p=>{
+  [...CATALOGUE,...customRefsCache].forEach(p=>{
     const qty=stockCache[p.code]||0;
     if(qty>0){
       const ref=REFS_FOURN[p.code];
