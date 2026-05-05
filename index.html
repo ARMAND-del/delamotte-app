@@ -6024,11 +6024,25 @@ function renderInventaire(){
   const ruptures=CATALOGUE.filter(p=>!stockCache[p.code]||stockCache[p.code]===0).length;
   const enStock=CATALOGUE.filter(p=>stockCache[p.code]>invSeuilAlerte).length;
 
+  // Valeur totale du stock
+  const allItems=[...CATALOGUE,...customRefsCache];
+  let valeurStock=0;
+  allItems.forEach(p=>{
+    const qty=stockCache[p.code]||0;
+    if(qty>0){
+      const ref=REFS_FOURN[p.code];
+      const prix=ref?parseFloat(ref.prix)||0:0;
+      valeurStock+=qty*prix;
+    }
+  });
+  const valeurStr=valeurStock>0?valeurStock.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'—';
+
   el.innerHTML=`
     <div class="inv-stats">
       <div class="stat-card"><div class="stat-num" style="color:var(--green)">${enStock}</div><div class="stat-label">En stock</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${alertes}</div><div class="stat-label">Stock faible</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--red)">${ruptures}</div><div class="stat-label">Rupture / Non saisi</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:#8e44ad;font-size:1.1rem">${valeurStr}</div><div class="stat-label">Valeur stock HT</div></div>
     </div>
     <div class="inv-toolbar">
       <input class="inv-search" type="text" placeholder="🔍 Rechercher..." value="${invFilter}" oninput="invFilter=this.value;renderInventaire()">
