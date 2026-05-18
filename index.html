@@ -422,7 +422,7 @@ const db = firebase.firestore();
     </div>
   </div>
   <!-- SUIVI CHANTIERS -->
-  <div id="tabSuivi" style="display:none">
+  <div id="tabSuivi"id="tabSuivi" style="display:none">
     <div id="suiviContent"></div>
   </div>
   <div id="tabStats" style="display:none">
@@ -656,6 +656,37 @@ const db = firebase.firestore();
     </div>
     <div class="cart-items" id="cartItems"></div>
     <button class="btn-send-order" onclick="sendOrder()">&#9989; Envoyer la commande</button>
+  </div>
+</div>
+
+<div id="prixModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:var(--white);border-radius:16px;padding:24px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="color:var(--blue);font-size:1rem;">💰 Prix &amp; Fournisseur</h3>
+      <button onclick="closePrixModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <div style="font-size:0.82rem;color:var(--muted);margin-bottom:16px;" id="prixModalNom"></div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Prix unitaire (€ HT)</label>
+        <input type="number" id="prixModalPrix" step="0.01" min="0" placeholder="0.00"
+          style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:1rem;background:var(--white);color:var(--text);">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Fournisseur</label>
+        <input type="text" id="prixModalFourn" placeholder="Nom du fournisseur"
+          style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:1rem;background:var(--white);color:var(--text);">
+      </div>
+      <div>
+        <label style="font-size:0.82rem;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Référence fournisseur</label>
+        <input type="text" id="prixModalRef" placeholder="Code fournisseur"
+          style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:1rem;background:var(--white);color:var(--text);">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button onclick="closePrixModal()" style="flex:1;padding:11px;background:var(--gray);border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;color:var(--text);">Annuler</button>
+      <button onclick="savePrixModal()" style="flex:2;padding:11px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:pointer;">✓ Enregistrer</button>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -3726,7 +3757,7 @@ const CATALOGUE=[
   {code:'101386',nom:'Manchon Placo Ø160',cat:'VENTILATION'},
   {code:'101387',nom:'Manchon Placo Ø200',cat:'VENTILATION'},
   {code:'101388',nom:'Manchon Placo Ø250',cat:'VENTILATION'},
-
+,
   {code:'130001',nom:'Raccord union 3 pièces FF Ø15X21',cat:'Laiton'},
   {code:'130002',nom:'Raccord union 3 pièces FF Ø20X27',cat:'Laiton'},
   {code:'130003',nom:'Raccord union 3 pièces FF Ø26X34',cat:'Laiton'},
@@ -3737,8 +3768,7 @@ const CATALOGUE=[
   {code:'130008',nom:'Raccord union 3 pièces MF Ø20X27',cat:'Laiton'},
   {code:'130009',nom:'Raccord union 3 pièces MF Ø26X34',cat:'Laiton'},
   {code:'130010',nom:'Raccord union 3 pièces MF Ø33X42',cat:'Laiton'},
-  {code:'130011',nom:'Mètre Ruban 5M',cat:'Quincailleries'},
-];
+  {code:'130011',nom:'Mètre Ruban 5M',cat:'Quincailleries'}];
 
 const IMG_MAP={
   '600001':1,'600002':2,'600003':3,
@@ -4282,9 +4312,7 @@ const IMG_MAP={
   '101382':511,'101383':511,'101384':511,
   // image512
   '101385':512,'101386':512,'101387':512,'101388':512,
-  '130001':513
-,'130001':513,'130002':513,'130003':513,'130004':513,'130005':513,'130006':514,'130007':514,'130008':514,'130009':514,'130010':514,'130011':515
-};
+,'130001':513,'130002':513,'130003':513,'130004':513,'130005':513,'130006':514,'130007':514,'130008':514,'130009':514,'130010':514,'130011':515};
 
 function imgPath(n,code){
   // Check custom images first (Firebase stored)
@@ -4370,6 +4398,7 @@ function startSession(u){
   listenOrders();
   listenStock();
   if(perms.reappro) listenReapproCommande();
+  listenReapproStock();
   loadRefsFournFromFirebase();
   listenCustomRefs();
   // Restore saved cart
@@ -4560,10 +4589,16 @@ function renderChantiers(){
 function updateChantierSelect(){
   const sel=document.getElementById('cartChantier');
   if(!sel)return;
-  const list=getChantiers();
   const current=sel.value;
   sel.innerHTML='<option value="">-- Sélectionner un chantier * --</option>';
-  // Tous les rôles voient tous les chantiers pour passer commande
+  let list=getChantiers();
+  // Chef de chantier : uniquement ses propres chantiers
+  if(currentRole==='chef'){
+    const full=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
+    const siens=full.filter(c=>c.chef===currentUser||c.name===currentUser).map(c=>c.name);
+    if(siens.length) list=siens;
+  }
+  // Conducteur : voit tous les chantiers (peut remplacer un collègue)
   list.forEach(name=>{
     const opt=document.createElement('option');
     opt.value=name;opt.textContent=name;
@@ -4824,8 +4859,10 @@ function listenOrders(){
 function getVisibleOrders(all){
   if(currentRole==='admin'||currentRole==='comptable') return all;
   if(currentRole==='conducteur'){
-    // Conducteur voit toutes les commandes (peut commander sur tous les chantiers)
-    return all;
+    // Conducteur voit uniquement les commandes des chantiers qui lui sont attribués
+    const chantiersFull=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
+    const mesChantiersNoms=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
+    return all.filter(o=>mesChantiersNoms.includes(o.chantier));
   }
   return all.filter(o=>o.user===currentUser);
 }
@@ -5002,20 +5039,25 @@ function confirmMarkDone(){
 
   db.collection('orders').doc(pendingMarkDoneId).update(update)
     .then(()=>{
-      // Deduct stock for checked items
+      const now=new Date().toISOString();
       if(inStockItems.length){
         const batch=db.batch();
         inStockItems.forEach(item=>{
           const current=stockCache[item.code]||0;
           const newQty=Math.max(0,current-item.qty);
-          batch.set(db.collection('stock').doc(item.code),{qty:newQty,updatedAt:new Date().toISOString()});
+          batch.set(db.collection('stock').doc(item.code),{qty:newQty,updatedAt:now});
+          const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
+          const chantiers=Object.assign({},existing.chantiers);
+          chantiers[order.chantier]=(chantiers[order.chantier]||0)+item.qty;
+          batch.set(db.collection('reappro_stock').doc(item.code),{
+            code:item.code,nom:item.nom,
+            totalQty:existing.totalQty+item.qty,
+            chantiers:chantiers,updatedAt:now
+          });
         });
         batch.commit().catch(()=>{});
       }
-      // Generate bon fournisseur for missing items
-      if(missingItems.length){
-        generateBonFournisseurItems(order, missingItems);
-      }
+      if(missingItems.length) generateBonFournisseurItems(order,missingItems);
       showToast('Commande traitée'+(livraison?' — Livraison: '+livraison:'')+(missingItems.length?' — Bon fournisseur généré':''));
       closeDeliveryModal();
     })
@@ -5348,21 +5390,13 @@ function listenReapproCommande(){
   });
 }
 function buildReapproData(){
-  const orders=getOrders().filter(o=>o.status==='done');
   const result={};
-  orders.forEach(order=>{
-    order.items.forEach(item=>{
-      const ref=REFS_FOURN[item.code]||{};
-      const fourn=ref.fournisseur||'INCONNU';
-      if(!result[fourn]) result[fourn]={};
-      if(!result[fourn][item.code]) result[fourn][item.code]={nom:item.nom,codeFourn:ref.code_fourn||'',prix:parseFloat(ref.prix)||0,totalQty:0,chantiers:{}};
-      result[fourn][item.code].totalQty+=item.qty;
-      if(!result[fourn][item.code].chantiers[order.chantier])
-        result[fourn][item.code].chantiers[order.chantier]=0;
-      result[fourn][item.code].chantiers[order.chantier]+=item.qty;
-    });
+  Object.entries(reapproStockCache).forEach(([code,data])=>{
+    const ref=REFS_FOURN[code]||{};
+    const fourn=ref.fournisseur||'INCONNU';
+    if(!result[fourn]) result[fourn]={};
+    result[fourn][code]={nom:data.nom,codeFourn:ref.code_fourn||'',prix:parseFloat(ref.prix)||0,totalQty:data.totalQty,chantiers:data.chantiers||{}};
   });
-  // Subtract quantities already ordered (en commande)
   Object.keys(reapproCommandeCache).forEach(code=>{
     const ec=reapproCommandeCache[code];
     const ref=REFS_FOURN[code]||{};
@@ -5593,19 +5627,26 @@ function openReceptionModal(fourn){
   pendingReceptionFourn=fourn;
   pendingReceptionData=articles;
   document.getElementById('receptionFourn').textContent=fourn;
-  document.getElementById('receptionItemsList').innerHTML=Object.entries(articles).map(([code,a],i)=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
-      <div style="flex:1;font-size:0.82rem;">
-        <span style="color:var(--muted);font-size:0.72rem">${code}</span><br>
-        <span style="font-weight:600">${a.nom}</span><br>
-        <span style="color:var(--muted);font-size:0.72rem">Commandé: ${a.totalQty}</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <label style="font-size:0.78rem;color:var(--muted)">Reçu:</label>
-        <input type="number" id="rec_${i}" value="${a.totalQty}" min="0" data-code="${code}"
-          style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-size:0.85rem;background:var(--white);color:var(--text);">
-      </div>
-    </div>`).join('');
+  document.getElementById('receptionItemsList').innerHTML=Object.entries(articles).map(([code,a],i)=>{
+    const qtyCmd=a.qtyEnCommande||a.totalQty||0;
+    const isReliquat=a.reliquat?true:false;
+    return '<div style="padding:10px 0;border-bottom:1px solid var(--border);">'
+      +'<div style="display:flex;align-items:center;gap:8px;">'
+      +'<div style="flex:1;font-size:0.82rem;">'
+      +'<span style="color:var(--muted);font-size:0.72rem">'+code+'</span>'
+      +(isReliquat?'<span style="background:#fff3cd;color:#856404;font-size:0.65rem;padding:1px 6px;border-radius:8px;margin-left:4px;">RELIQUAT</span>':'')
+      +'<br><span style="font-weight:600">'+a.nom+'</span><br>'
+      +'<span style="color:var(--muted);font-size:0.72rem">Commandé: '+qtyCmd+'</span>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
+      +'<label style="font-size:0.72rem;color:var(--muted)">Reçu</label>'
+      +'<input type="number" id="rec_'+i+'" value="'+qtyCmd+'" min="0" data-code="'+code+'"'
+      +' style="width:65px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-size:0.9rem;font-weight:700;background:var(--white);color:var(--text);"'
+      +' oninput="updateReliquatPreview('+i+','+qtyCmd+')">'
+      +'<span id="reliquat_'+i+'" style="font-size:0.7rem;color:var(--orange);font-weight:600;min-height:14px;"></span>'
+      +'</div></div></div>';
+  }).join('');
+  setTimeout(function(){var arr=Object.entries(articles);for(var ii=0;ii<arr.length;ii++){updateReliquatPreview(ii,(arr[ii][1].qtyEnCommande||arr[ii][1].totalQty||0));}},50);
   document.getElementById('receptionModal').style.display='flex';
 }
 function closeReceptionModal(){
@@ -5616,35 +5657,52 @@ function closeReceptionModal(){
 function confirmReception(){
   if(!pendingReceptionData) return;
   const batch=db.batch();
-  let count=0;
+  let count=0,reliquats=0;
   const receptionsParFourn={};
-  Object.entries(pendingReceptionData).forEach(([code,a],i)=>{
-    const qtyRecu=parseInt(document.getElementById('rec_'+i)?.value)||0;
-    if(qtyRecu>0){
-      const current=stockCache[code]||0;
-      batch.set(db.collection('stock').doc(code),{qty:current+qtyRecu,updatedAt:new Date().toISOString()});
-      batch.delete(db.collection('reappro_commande').doc(code));
-      const fourn=a.fournisseur||pendingReceptionFourn||'';
-      if(!receptionsParFourn[fourn]) receptionsParFourn[fourn]=[];
-      receptionsParFourn[fourn].push({code,nom:a.nom,qtyRecu,batigest:a.batigest||''});
-      count++;
-    }
-  });
-  // Archive réception in historique
   const now=new Date().toISOString();
   const today=new Date().toLocaleDateString('fr-FR');
+  Object.entries(pendingReceptionData).forEach(([code,a],i)=>{
+    const qtyRecu=parseInt(document.getElementById('rec_'+i)?.value)||0;
+    const qtyCommandee=a.qtyEnCommande||a.totalQty||0;
+    const qtyReliquat=qtyCommandee-qtyRecu;
+    if(qtyRecu>0){
+      const current=stockCache[code]||0;
+      batch.set(db.collection('stock').doc(code),{qty:current+qtyRecu,updatedAt:now});
+      stockCache[code]=(current+qtyRecu);
+      const fourn=a.fournisseur||pendingReceptionFourn||'';
+      if(!receptionsParFourn[fourn]) receptionsParFourn[fourn]=[];
+      receptionsParFourn[fourn].push({code,nom:a.nom,qtyRecu,qtyCommandee,qtyReliquat:Math.max(0,qtyReliquat),batigest:a.batigest||''});
+      count++;
+    }
+    if(qtyReliquat>0&&qtyRecu>=0){
+      batch.set(db.collection('reappro_commande').doc(code),{
+        code,nom:a.nom,fournisseur:a.fournisseur||pendingReceptionFourn||'',
+        codeFourn:a.codeFourn||'',qtyEnCommande:qtyReliquat,
+        batigest:a.batigest||'',commandeDate:a.commandeDate||now,
+        reliquat:true,qtyInitiale:qtyCommandee
+      });
+      reliquats++;
+    } else if(qtyRecu>0){
+      batch.delete(db.collection('reappro_commande').doc(code));
+      batch.delete(db.collection('reappro_stock').doc(code));
+    }
+  });
   Object.entries(receptionsParFourn).forEach(([fourn,items])=>{
     const batigest=items[0]?.batigest||'';
     const histId='REC_'+(batigest||fourn.replace(/\W/g,''))+'_'+Date.now();
     batch.set(db.collection('historique_commandes').doc(histId),{
-      batigest,fournisseur:fourn,date:today,dateISO:now,
-      statut:'recu',
-      articles:items.map(it=>({code:it.code,nom:it.nom,codeFourn:'',prix:0,qtyCommandee:it.qtyRecu,qtyRecue:it.qtyRecu,chantiers:{}}))
+      batigest,fournisseur:fourn,date:today,dateISO:now,statut:'recu',
+      articles:items.map(it=>({code:it.code,nom:it.nom,codeFourn:'',prix:0,
+        qtyCommandee:it.qtyCommandee,qtyRecue:it.qtyRecu,
+        qtyReliquat:it.qtyReliquat,chantiers:{}}))
     });
   });
   batch.commit().then(()=>{
-    showToast(`Réception confirmée ✅ — ${count} référence(s) ajoutées au stock`);
+    let msg='✅ Réception confirmée — '+count+' référence(s) ajoutée(s) au stock';
+    if(reliquats>0) msg+=' — '+reliquats+' reliquat(s) en attente';
+    showToast(msg);
     closeReceptionModal();
+    renderReappro();
   }).catch(()=>showToast('Erreur'));
 }
 
@@ -5687,16 +5745,27 @@ function renderHistoriqueCommandes(){
               <thead><tr><th>Code</th><th>Désignation</th><th>Code fourn.</th><th>Chantier(s)</th><th>Qté</th><th>Prix U.</th><th>Total HT</th></tr></thead>
               <tbody>
                 ${(doc.articles||[]).map(a=>{
-                  const chStr=a.chantiers?Object.entries(a.chantiers).map(([c,q])=>c+': '+q).join('<br>'):'';
+                  const chStr=a.chantiers?Object.entries(a.chantiers).map(([ch,q])=>{
+                    const m=a.prix>0?(q*a.prix).toFixed(2)+' €':'';
+                    return '<span style="display:block">'+ch+': <b>'+q+'</b>'+(m?' — <span style="color:var(--green)">'+m+'</span>':'')+'</span>';
+                  }).join(''):'';
                   return '<tr><td style="font-size:0.75rem;color:var(--muted)">'+a.code+'</td>'
                     +'<td>'+a.nom+'</td>'
                     +'<td style="font-size:0.75rem">'+(a.codeFourn||'')+'</td>'
                     +'<td style="font-size:0.75rem">'+chStr+'</td>'
                     +'<td style="text-align:center;font-weight:700">'+(a.qtyCommandee||0)+'</td>'
                     +'<td style="text-align:right">'+(a.prix>0?a.prix.toFixed(2)+' €':'-')+'</td>'
-                    +'<td style="text-align:right">'+(a.prix>0?((a.qtyCommandee||0)*a.prix).toFixed(2)+' €':'-')+'</td>'
+                    +'<td style="text-align:right;font-weight:700;color:var(--green)">'+(a.prix>0?((a.qtyCommandee||0)*a.prix).toFixed(2)+' €':'-')+'</td>'
                     +'</tr>';
                 }).join('')}
+              <tr style="background:#f8f9fa;"><td colspan="7" style="padding:10px 8px;">
+                <div style="font-size:0.8rem;font-weight:700;color:var(--muted);margin-bottom:6px;">💼 Répartition par chantier</div>
+                ${buildChantierSummary(doc.articles||[])}
+                <div style="display:flex;justify-content:space-between;padding:6px 0 0;margin-top:4px;border-top:2px solid var(--border);">
+                  <span style="font-size:0.85rem;font-weight:700">Total commande</span>
+                  <span style="font-size:0.9rem;font-weight:700;color:var(--green)">${totalHT.toFixed(2)} € HT</span>
+                </div>
+              </td></tr>
               </tbody>
             </table>
           </div>
@@ -5987,6 +6056,7 @@ function printOrder(id){
 // ===== INVENTAIRE =====
 let invFilter='';
 let invCat='Toutes';
+let invShowFaible=false;
 let invSeuilAlerte=5;
 let stockListener=null;
 let stockCache={};
@@ -6022,6 +6092,46 @@ function saveStockItem(code, qty){
   return db.collection('stock').doc(code).set({qty:parseInt(qty)||0,updatedAt:new Date().toISOString()});
 }
 
+function renderInventaireBody(){
+  // Only re-render the table body without touching the search input
+  const allItems=[...CATALOGUE,...customRefsCache];
+  let filtered=allItems.filter(p=>{
+    const matchCat=invCat==='Toutes'||p.cat===invCat;
+    const matchSearch=!invFilter||p.code.toLowerCase().includes(invFilter)||p.nom.toLowerCase().includes(invFilter.toLowerCase());
+    const qty=stockCache[p.code]||0;
+    const matchFaible=!invShowFaible||(qty>0&&qty<=invSeuilAlerte);
+    return matchCat&&matchSearch&&matchFaible;
+  });
+  const tbody=document.getElementById('invTableBody');
+  const countEl=document.getElementById('invCount');
+  if(!tbody) return;
+  // Update stats
+  const enStock=allItems.filter(p=>(stockCache[p.code]||0)>invSeuilAlerte).length;
+  const alertes=allItems.filter(p=>{const q=stockCache[p.code]||0;return q>0&&q<=invSeuilAlerte;}).length;
+  const ruptures=allItems.filter(p=>(stockCache[p.code]||0)===0).length;
+  if(countEl) countEl.textContent=filtered.length+' article(s)';
+  tbody.innerHTML=filtered.map(p=>{
+    const qty=stockCache[p.code]||0;
+    const badge=qty===0
+      ?'<span class="stock-zero">❌ 0</span>'
+      :qty<=invSeuilAlerte
+        ?'<span class="stock-low">⚠️ '+qty+'</span>'
+        :'<span class="stock-ok">✅ '+qty+'</span>';
+    const isCustom=customRefsCache.some(r=>r.code===p.code);
+    return '<tr>'
+      +'<td style="font-size:0.75rem;color:var(--muted)">'+p.code+(isCustom?' <span style="background:#e3f2fd;color:var(--blue);font-size:0.65rem;padding:1px 5px;border-radius:8px">✏️</span>':'')+'</td>'
+      +'<td>'+p.nom+'</td>'
+      +'<td style="font-size:0.75rem">'+p.cat+'</td>'
+      +'<td style="text-align:center"><input class="inv-qty-input" type="number" min="0" value="'+qty+'" onchange="saveAndRefreshStock(this,\'' +p.code+ '\')" onblur="this.style.borderColor=\'\'"></td>'
+      +'<td style="text-align:right;font-size:0.82rem">'+(()=>{const r=REFS_FOURN[p.code];return r&&r.prix?parseFloat(r.prix).toFixed(2)+' €':'-';})()+'</td>'
+      +'<td style="text-align:center">'+badge+'</td>'
+      +'<td style="text-align:center;white-space:nowrap">'
+      +'<button onclick="openPrixModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>'
+      +(isCustom?'<button onclick="openCustomRefModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button><button onclick="deleteCustomRef(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>':'')
+      +'</td></tr>';
+  }).join('');
+}
+
 function renderInventaire(){
   const el=document.getElementById('inventaireContent');
   const cats=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
@@ -6029,8 +6139,11 @@ function renderInventaire(){
   let filtered=allItems.filter(p=>{
     const matchCat=invCat==='Toutes'||p.cat===invCat;
     const matchSearch=!invFilter||p.code.toLowerCase().includes(invFilter)||p.nom.toLowerCase().includes(invFilter.toLowerCase());
-    return matchCat&&matchSearch;
+    const qty=stockCache[p.code]||0;
+    const matchFaible=!invShowFaible||(qty>0&&qty<=invSeuilAlerte);
+    return matchCat&&matchSearch&&matchFaible;
   });
+  // Reset faible filter after use (so normal search still works)
 
   // Stats
   const stockArticles=Object.keys(stockCache).length;
@@ -6053,19 +6166,30 @@ function renderInventaire(){
   el.innerHTML=`
     <div class="inv-stats">
       <div class="stat-card"><div class="stat-num" style="color:var(--green)">${enStock}</div><div class="stat-label">En stock</div></div>
-      <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${alertes}</div><div class="stat-label">Stock faible</div></div>
+      <div class="stat-card" onclick="showStockFaible()" style="cursor:pointer;transition:transform 0.15s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"><div class="stat-num" style="color:var(--orange)">${alertes}</div><div class="stat-label">Stock faible 🔍</div></div>
       <div class="stat-card"><div class="stat-num" style="color:var(--red)">${ruptures}</div><div class="stat-label">Rupture / Non saisi</div></div>
       <div class="stat-card"><div class="stat-num" style="color:#8e44ad;font-size:1.1rem">${valeurStr}</div><div class="stat-label">Valeur stock HT</div></div>
     </div>
     <div class="inv-toolbar">
-      <input class="inv-search" type="text" placeholder="🔍 Rechercher..." value="${invFilter}" oninput="invFilter=this.value;renderInventaire()">
-      <select class="inv-cat-select" onchange="invCat=this.value;renderInventaire()">
+      <input class="inv-search" type="text" placeholder="🔍 Rechercher..." value="${invFilter}" id="invSearch" oninput="invFilter=this.value;invShowFaible=false;this.placeholder='Rechercher...';this.style.borderColor='';renderInventaireBody()">
+      <select class="inv-cat-select" onchange="invCat=this.value;renderInventaireBody()">
         ${cats.map(c=>`<option value="${c}" ${c===invCat?'selected':''}>${c}</option>`).join('')}
       </select>
       <div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--muted)">
         Alerte: <input class="inv-seuil-input" type="number" min="0" value="${invSeuilAlerte}" onchange="invSeuilAlerte=parseInt(this.value)||0;renderInventaire()">
       </div>
       <button onclick="exportStockExcel()" style="padding:8px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📥 Export stock</button>
+      ${currentRole==='admin'?`
+
+      <label style="padding:8px 14px;background:#1abc9c;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
+        📦 Importer stock GC
+        <input type="file" accept=".xlsx" style="display:none" onchange="importStockGC(event)">
+      </label>
+      <button onclick="resetStock()" style="padding:8px 14px;background:#e74c3c;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">🗑️ Réinitialiser</button>
+      <label style="padding:8px 14px;background:#8e44ad;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
+        📥 Charger prix JSON
+        <input type="file" accept=".json" style="display:none" onchange="loadRefsFromJSON(event)">
+      </label>`:''}
       <button onclick="openCustomRefModal()" style="padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">➕ Nouvelle référence</button>
       <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
         🔄 Maj prix/fournisseurs
@@ -6075,9 +6199,9 @@ function renderInventaire(){
     <div style="overflow-x:auto">
       <table class="inv-table">
         <thead><tr>
-          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock</th><th style="text-align:center">État</th><th></th>
+          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock</th><th style="text-align:right">Prix U.</th><th style="text-align:center">État</th><th></th>
         </tr></thead>
-        <tbody>
+        <tbody id="invTableBody">
           ${filtered.map(p=>{
             const qty=stockCache[p.code]||0;
             const etat=qty>invSeuilAlerte?'ok':qty>0?'low':'zero';
@@ -6092,8 +6216,10 @@ function renderInventaire(){
                   onchange="saveStockItem('${p.code}',this.value).then(()=>showToast('Stock mis à jour ✅')).catch(()=>showToast('Erreur'))"
                   onblur="this.style.borderColor=''">
               </td>
+              <td style="text-align:right;font-size:0.82rem">${(()=>{const r=REFS_FOURN[p.code];return r&&r.prix?parseFloat(r.prix).toFixed(2)+' €':'-';})()}</td>
               <td style="text-align:center">${badge}</td>
               <td style="text-align:center;white-space:nowrap">
+                <button onclick="openPrixModal('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>
                 ${isCustom?`<button onclick="openCustomRefModal('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button>
                 <button onclick="deleteCustomRef('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>`:''}
               </td>
@@ -6251,40 +6377,65 @@ function importRefsFourn(event){
   const reader=new FileReader();
   reader.onload=function(e){
     try{
-      const data=new Uint8Array(e.target.result);
-      const wb=XLSX.read(data,{type:'array'});
-      let ws=wb.Sheets['Feuil2']||wb.Sheets[wb.SheetNames[1]];
-      if(!ws){showToast('Feuille introuvable');return;}
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellFormula:false});
+      const ALL_SHEETS=['Quincaillerie','Supportage visserie','Accessoire Sanitaire',
+        'PVC','PVC BLANC','Laiton','PER','Multicouche','Cuivres',
+        'PVC-U','PVC-C','PEHD','Mapress','Ventilation','Electricite','INCORPORATION','EPI'];
+      // Load fournisseur from reference sheet
+      const refData={};
+      const refSheet=wb.Sheets['reference'];
+      if(refSheet){
+        XLSX.utils.sheet_to_json(refSheet,{header:1,defval:'',raw:true}).forEach(function(row){
+          if(!row[0]||row[0]===0) return;
+          try{
+            const code=String(Math.round(parseFloat(String(row[0]))));
+            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim()};
+          }catch(ex){}
+        });
+      }
+      // Start with all articles from reference sheet
       const updates={};
-      let count=0;
-      rows.forEach(row=>{
-        const code=row[0];
-        const fourn=row[2];
-        const codeFourn=row[3];
-        const prix=row[4];
-        if(!code||code===0||code==='0') return;
-        try{
-          const codeStr=String(Math.round(parseFloat(String(code))));
-          const ref={
-            fournisseur:String(fourn||'').trim(),
-            code_fourn:String(codeFourn||'').trim(),
-            prix:String(prix||'').trim()
-          };
-          REFS_FOURN[codeStr]=ref;
-          updates[codeStr]=ref;
-          count++;
-        }catch(e2){}
+      Object.entries(refData).forEach(function(e){
+        updates[e[0]]={fournisseur:e[1].fournisseur,code_fourn:e[1].code_fourn,prix:''};
       });
-      // Save to Firebase for persistence
+      // Enrich with prix from category sheets
+      let count=0;
+      wb.SheetNames.forEach(function(sname){
+        if(!ALL_SHEETS.some(function(s){return s.toLowerCase()===sname.toLowerCase();})) return;
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[sname],{header:1,defval:'',raw:true});
+        let hrow=-1;
+        for(let i=0;i<Math.min(10,rows.length);i++){
+          if(rows[i].some(function(v){const u=String(v).toUpperCase();return u.indexOf('DESIGNATION')!==-1||u.indexOf('DÉSIGNATION')!==-1;})){hrow=i;break;}
+        }
+        if(hrow===-1) return;
+        const headers=rows[hrow].map(function(v){return String(v).toUpperCase().replace(/\s+/g,' ').trim();});
+        let colCode=-1,colPrix=-1;
+        for(let j=0;j<headers.length;j++){
+          if(headers[j].indexOf('CODE')!==-1&&colCode===-1) colCode=j;
+          if((headers[j].indexOf('PRIX UNIT')!==-1||headers[j].indexOf('PRIX U')!==-1)&&headers[j].indexOf('COUT')===-1) colPrix=j;
+        }
+        if(colCode===-1||colPrix===-1) return;
+        for(let r=hrow+1;r<rows.length;r++){
+          const row=rows[r];
+          const raw=row[colCode];
+          if(!raw&&raw!==0) continue;
+          let code='';
+          try{const n=parseFloat(String(raw));code=isNaN(n)?String(raw).trim():String(Math.round(n));}
+          catch(ex){continue;}
+          if(!code||code==='0'||code==='NaN') continue;
+          const prix=parseFloat(row[colPrix])||0;
+          if(!prix) continue;
+          const existing=updates[code]||{};
+          updates[code]={fournisseur:existing.fournisseur||'',code_fourn:existing.code_fourn||'',prix:String(prix)};
+          REFS_FOURN[code]=updates[code];
+          count++;
+        }
+      });
+      Object.entries(updates).forEach(function(e){if(!REFS_FOURN[e[0]])REFS_FOURN[e[0]]=e[1];});
       updates['_updatedAt']=new Date().toISOString();
       db.collection('config').doc('refs_fourn').set(updates)
-        .then(()=>{
-          showToast(`✅ ${count} références mises à jour et sauvegardées`);
-        })
-        .catch(()=>{
-          showToast(`✅ ${count} références mises à jour (session uniquement)`);
-        });
+        .then(()=>{ showToast('✅ '+count+' prix mis à jour !'); })
+        .catch(()=>{ showToast('❌ Erreur Firebase'); });
       event.target.value='';
     }catch(err){
       showToast('Erreur lecture fichier Excel');
@@ -6292,7 +6443,6 @@ function importRefsFourn(event){
     }
   };
   reader.readAsArrayBuffer(file);
-
 }
 
 // ===== BON FOURNISSEUR =====
@@ -6396,6 +6546,211 @@ if('serviceWorker' in navigator){
       if(!refreshing){refreshing=true;window.location.reload();}
     });
   });
+}
+
+let reapproStockCache={};
+
+function listenReapproStock(){
+  db.collection('reappro_stock').onSnapshot(snap=>{
+    reapproStockCache={};
+    snap.docs.forEach(d=>{reapproStockCache[d.id]=d.data();});
+    if(document.getElementById('tabReappro')&&document.getElementById('tabReappro').style.display!=='none') renderReappro();
+  });
+}
+
+function importStockGC(event){
+  var file=event.target.files[0];
+  if(!file)return;
+  event.target.value='';
+  var ALL_SHEETS=['Quincaillerie','Supportage visserie','Accessoire Sanitaire',
+    'PVC','PVC BLANC','Laiton','PER','Multicouche','Cuivres',
+    'PVC-U','PVC-C','PEHD','Mapress','Ventilation','Electricite','INCORPORATION','EPI'];
+  showToast('Lecture du fichier...');
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellFormula:false});
+      var updates={};var total=0;
+      wb.SheetNames.forEach(function(sname){
+        if(!ALL_SHEETS.some(function(s){return s.toLowerCase()===sname.toLowerCase();}))return;
+        var rows=XLSX.utils.sheet_to_json(wb.Sheets[sname],{header:1,defval:'',raw:true});
+        var hrow=-1;
+        for(var i=0;i<Math.min(10,rows.length);i++){
+          if(rows[i].some(function(v){var u=String(v).toUpperCase();return u.indexOf('DESIGNATION')!==-1||u.indexOf('DÉSIGNATION')!==-1;})){hrow=i;break;}
+        }
+        if(hrow===-1)return;
+        var headers=rows[hrow].map(function(v){return String(v).toUpperCase().replace(/\s+/g,' ').trim();});
+        var colCode=-1,colGC=-1,colQty=-1;
+        for(var j=0;j<headers.length;j++){
+          if(headers[j].indexOf('CODE')!==-1&&colCode===-1)colCode=j;
+          if(headers[j].indexOf('QUANTITE GC')!==-1)colGC=j;
+          if(colGC===-1&&headers[j].indexOf('QUANTITE')!==-1&&headers[j].indexOf('MAG')===-1&&headers[j].indexOf('GC')===-1&&headers[j].indexOf('COUT')===-1)colQty=j;
+        }
+        var qtyCol=colGC!==-1?colGC:(colQty!==-1?colQty:-1);
+        if(colCode===-1||qtyCol===-1){
+          if(colCode===-1){
+            for(var r2=hrow+1;r2<Math.min(hrow+10,rows.length);r2++){
+              for(var j2=0;j2<rows[r2].length;j2++){
+                var v2=rows[r2][j2];
+                if(v2&&!isNaN(parseFloat(String(v2)))&&parseFloat(String(v2))>10000){colCode=j2;break;}
+              }
+              if(colCode!==-1)break;
+            }
+          }
+          if(colCode===-1||qtyCol===-1)return;
+        }
+        for(var r=hrow+1;r<rows.length;r++){
+          var row=rows[r];var raw=row[colCode];
+          if(!raw&&raw!==0)continue;
+          var code='';
+          try{var n=parseFloat(String(raw));code=isNaN(n)?String(raw).trim():String(Math.round(n));}
+          catch(ex){continue;}
+          if(!code||code==='0'||code==='NaN')continue;
+          var qty=parseInt(row[qtyCol])||0;
+          if(qty>0){updates[code]=qty;total++;}
+        }
+      });
+      if(!total){showToast('Aucun stock GC trouvé');return;}
+      if(!confirm(total+' articles trouvés.\nImporter dans l\'application ?')){showToast('Import annulé');return;}
+      var entries=Object.entries(updates);
+      var now=new Date().toISOString();
+      function writeBatch(i){
+        var batch=db.batch();
+        entries.slice(i,i+400).forEach(function(x){batch.set(db.collection('stock').doc(x[0]),{qty:x[1],updatedAt:now});});
+        return batch.commit().then(function(){return entries.length>i+400?writeBatch(i+400):null;});
+      }
+      showToast('Enregistrement Firebase...');
+      writeBatch(0).then(function(){
+        entries.forEach(function(x){stockCache[x[0]]=x[1];});
+        showToast('✅ '+total+' articles importés !');
+        renderInventaire();
+      }).catch(function(){showToast('❌ Erreur Firebase');});
+    }catch(err){showToast('Erreur lecture Excel');console.error(err);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function resetStock(){
+  if(!confirm('Réinitialiser TOUT le stock à 0 ?\nCette action est irréversible.'))return;
+  db.collection('stock').get().then(function(snap){
+    var batch=db.batch();var count=0;
+    snap.docs.forEach(function(doc){
+      batch.delete(doc.ref);count++;
+      if(count%400===0){batch.commit();batch=db.batch();}
+    });
+    return batch.commit().then(function(){return count;});
+  }).then(function(count){
+    stockCache={};
+    showToast('✅ Stock réinitialisé ('+count+' articles)');
+    renderInventaire();
+  }).catch(function(){showToast('❌ Erreur Firebase');});
+}
+
+function updateReliquatPreview(i,qtyCmd){
+  var input=document.getElementById('rec_'+i);
+  var preview=document.getElementById('reliquat_'+i);
+  if(!input||!preview)return;
+  var recu=parseInt(input.value)||0;
+  var reliquat=qtyCmd-recu;
+  if(reliquat>0)preview.textContent='Reliquat: '+reliquat;
+  else if(reliquat<0)preview.textContent='⚠️ Excédent: '+Math.abs(reliquat);
+  else preview.textContent='✅ Complet';
+}
+
+var prixModalCode=null;
+
+function openPrixModal(code){
+  prixModalCode=code;
+  var item=CATALOGUE.find(function(p){return p.code===code;})||customRefsCache.find(function(p){return p.code===code;})||{};
+  document.getElementById('prixModalNom').textContent='['+code+'] '+(item.nom||code);
+  var ref=REFS_FOURN[code]||{};
+  document.getElementById('prixModalPrix').value=ref.prix?parseFloat(ref.prix).toFixed(2):'';
+  document.getElementById('prixModalFourn').value=ref.fournisseur||'';
+  document.getElementById('prixModalRef').value=ref.code_fourn||'';
+  document.getElementById('prixModal').style.display='flex';
+}
+
+function closePrixModal(){
+  document.getElementById('prixModal').style.display='none';
+  prixModalCode=null;
+}
+
+function savePrixModal(){
+  if(!prixModalCode)return;
+  var prix=document.getElementById('prixModalPrix').value.trim();
+  var fourn=document.getElementById('prixModalFourn').value.trim();
+  var refFourn=document.getElementById('prixModalRef').value.trim();
+  var ref={fournisseur:fourn,code_fourn:refFourn,prix:prix};
+  REFS_FOURN[prixModalCode]=ref;
+  var updates={};
+  updates[prixModalCode]=ref;
+  updates['_updatedAt']=new Date().toISOString();
+  db.collection('config').doc('refs_fourn').set(updates,{merge:true})
+    .then(function(){showToast('✅ Prix mis à jour !');closePrixModal();renderInventaire();})
+    .catch(function(){showToast('❌ Erreur sauvegarde');});
+}
+
+function loadRefsFromJSON(event){
+  var file=event.target.files[0];
+  if(!file)return;
+  event.target.value='';
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=JSON.parse(e.target.result);
+      data['_updatedAt']=new Date().toISOString();
+      var count=Object.keys(data).filter(function(k){return k!=='_updatedAt';}).length;
+      if(!confirm(count+' références trouvées.\nInjecter dans Firebase ?'))return;
+      Object.entries(data).forEach(function(e2){if(e2[0]!=='_updatedAt')REFS_FOURN[e2[0]]=e2[1];});
+      db.collection('config').doc('refs_fourn').set(data)
+        .then(function(){showToast('✅ '+count+' prix injectés !');renderInventaire();})
+        .catch(function(){showToast('❌ Erreur Firebase');});
+    }catch(err){showToast('Erreur lecture JSON');console.error(err);}
+  };
+  reader.readAsText(file,'utf-8');
+}
+
+function buildChantierSummary(articles){
+  var byChantier={};
+  articles.forEach(function(a){
+    if(!a.chantiers) return;
+    Object.entries(a.chantiers).forEach(function(e){
+      var ch=e[0];var q=e[1];
+      if(!byChantier[ch]) byChantier[ch]={qty:0,montant:0};
+      byChantier[ch].qty+=q;
+      byChantier[ch].montant+=a.prix>0?q*a.prix:0;
+    });
+  });
+  var html=Object.entries(byChantier)
+    .sort(function(a,b){return b[1].montant-a[1].montant;})
+    .map(function(e){
+      var ch=e[0];var d=e[1];
+      return '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);">'
+        +'<span style="font-size:0.82rem;font-weight:600">'+ch+'</span>'
+        +'<div style="display:flex;gap:16px;font-size:0.82rem;">'
+        +'<span style="color:var(--muted)">'+d.qty+' articles</span>'
+        +'<span style="font-weight:700;color:var(--green)">'+(d.montant>0?d.montant.toFixed(2)+' € HT':'-')+'</span>'
+        +'</div></div>';
+    }).join('');
+  return html;
+}
+
+function showStockFaible(){
+  showTab('inventaire');
+  // Set filter to show only low stock items
+  invFilter='';
+  invCat='Toutes';
+  invShowFaible=true;
+  renderInventaire();
+  // Highlight the search box
+  const input=document.getElementById('invSearch');
+  if(input){input.placeholder='Filtré: stock faible';input.style.borderColor='var(--orange)';}
+}
+
+function saveAndRefreshStock(input, code){
+  saveStockItem(code, input.value)
+    .then(()=>showToast('Stock mis à jour ✅'))
+    .catch(()=>showToast('Erreur'));
 }
 </script>
 </body>
