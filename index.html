@@ -4581,9 +4581,41 @@ function renderChantiers(){
         <div class="user-mgmt-role">${c.conducteur?'👷 Conducteur : '+c.conducteur:'Pas de conducteur assigné'}</div>
       </div>
       <div class="user-mgmt-actions">
+        <button class="btn-edit-user" onclick="editChantier('${c.name.replace(/'/g,"\\'")}')">✏️</button>
         <button class="btn-del-user" onclick="deleteChantier('${c.name.replace(/'/g,"\\'")}')">🗑️</button>
       </div>
     </div>`).join('');
+}
+
+function editChantier(name){
+  const list=getChantiersFull();
+  const c=list.find(x=>x.name===name);
+  if(!c)return;
+  document.getElementById('newChantierName').value=c.name;
+  document.getElementById('newChantierName').disabled=true;
+  document.getElementById('editChantierOrig').value=c.name;
+  updateConducteurSelect();
+  setTimeout(()=>{document.getElementById('newChantierConducteur').value=c.conducteur||'';},100);
+  const btn=document.querySelector('.btn-save-user[onclick="addChantier()"]');
+  if(btn){btn.textContent='💾 Modifier le chantier';btn.setAttribute('onclick','saveEditChantier()');}
+  document.getElementById('newChantierName').scrollIntoView({behavior:'smooth'});
+}
+
+function saveEditChantier(){
+  const name=document.getElementById('editChantierOrig').value;
+  const conducteur=document.getElementById('newChantierConducteur').value;
+  if(!name)return;
+  db.collection('chantiers').doc(name).update({conducteur})
+    .then(()=>{
+      showToast('Conducteur mis à jour ✅');
+      document.getElementById('newChantierName').value='';
+      document.getElementById('newChantierName').disabled=false;
+      document.getElementById('editChantierOrig').value='';
+      document.getElementById('newChantierConducteur').value='';
+      const btn=document.querySelector('.btn-save-user[onclick="saveEditChantier()"]');
+      if(btn){btn.textContent='➕ Ajouter le chantier';btn.setAttribute('onclick','addChantier()');}
+    })
+    .catch(()=>showToast('Erreur'));
 }
 function updateChantierSelect(){
   const sel=document.getElementById('cartChantier');
