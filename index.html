@@ -385,6 +385,7 @@ const db = firebase.firestore();
             <option value="chef">Chef de chantier</option>
             <option value="conducteur">Conducteur de travaux</option>
             <option value="comptable">Comptable</option>
+            <option value="particulier">Particulier</option>
             <option value="admin">Admin (accès total)</option>
           </select>
           <input type="hidden" id="editUserOrigName">
@@ -400,6 +401,10 @@ const db = firebase.firestore();
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_inventaire"> 📦 Inventaire</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_corbeille"> 🗑️ Corbeille</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_users"> 👤 Utilisateurs</label>
+          </div>
+          <div id="chantierFixeBlock" style="display:none;margin-top:8px;">
+            <label style="font-size:0.82rem;font-weight:700;color:var(--blue)">🏠 Chantier fixe (Particulier)</label>
+            <input type="text" id="chantierFixeInput" placeholder="Ex: 001 Particulier" style="width:100%;padding:8px 10px;border:2px solid var(--border);border-radius:8px;font-size:0.85rem;background:var(--white);color:var(--text);margin-top:4px;box-sizing:border-box;">
           </div>
         </div>
         <button class="btn-save-user" onclick="saveUser()">💾 Enregistrer</button>
@@ -4429,7 +4434,7 @@ function startSession(u){
   localStorage.setItem('delamotte_session', u);
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='flex';
-  const roleIcon=currentRole==='admin'?' 🔑':currentRole==='conducteur'?' 🦺':currentRole==='comptable'?' 📊':'';
+  const roleIcon=currentRole==='admin'?' 🔑':currentRole==='conducteur'?' 🦺':currentRole==='comptable'?' 📊':currentRole==='particulier'?' 🏠':'';
   document.getElementById('userBadge').textContent=u+roleIcon;
   if(currentRole==='chef') document.getElementById('cartChef').value=u;
 
@@ -4498,6 +4503,7 @@ const ROLE_DEFAULTS={
   chef:     {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false},
   conducteur:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false},
   comptable:{catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false},
+  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false},
 };
 const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users'];
 
@@ -4514,10 +4520,13 @@ function updatePermissionsFromRole(){
     if(el) el.checked=!!defaults[p];
   });
   const isAdmin=role==='admin';
+  const isParticulier=role==='particulier';
   ALL_PERMS.forEach(p=>{
     const el=document.getElementById('perm_'+p);
     if(el) el.disabled=isAdmin;
   });
+  const block=document.getElementById('chantierFixeBlock');
+  if(block) block.style.display=isParticulier?'block':'none';
 }
 
 function renderUsers(){
@@ -4534,7 +4543,7 @@ function renderUsers(){
     const isAdmin=name==='Magasin';
     const perms=getPermissions(data);
     const permIcons=ALL_PERMS.filter(p=>perms[p]).map(p=>ICONS[p]).join(' ');
-    const roleLabel=data.role==='admin'?'🔑 Admin':data.role==='conducteur'?'🦺 Conducteur':data.role==='comptable'?'📊 Comptable':'👷 Chef';
+    const roleLabel=data.role==='admin'?'🔑 Admin':data.role==='conducteur'?'🦺 Conducteur':data.role==='comptable'?'📊 Comptable':data.role==='particulier'?'🏠 Particulier'+(data.chantierFixe?' — '+data.chantierFixe:''):'👷 Chef';
     return `<div class="user-mgmt-card">
       <div class="user-mgmt-info">
         <div class="user-mgmt-name">${name}</div>
@@ -4558,6 +4567,10 @@ function saveUser(){
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);permissions[p]=el?el.checked:false;});
   if(role==='admin') ALL_PERMS.forEach(p=>permissions[p]=true);
   const userData={pass,role,permissions};
+  if(role==='particulier'){
+    const chantierFixe=document.getElementById('chantierFixeInput')?.value.trim()||'';
+    if(chantierFixe) userData.chantierFixe=chantierFixe;
+  }
   const saves=[];
   if(origName && origName!==name){
     saves.push(db.collection('users').doc(origName).delete());
@@ -4579,6 +4592,10 @@ function editUser(name){
   document.getElementById('editUserOrigName').value=name;
   const perms=getPermissions(data);
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);if(el){el.checked=!!perms[p];el.disabled=data.role==='admin';}});
+  const block=document.getElementById('chantierFixeBlock');
+  if(block) block.style.display=data.role==='particulier'?'block':'none';
+  const fixeInput=document.getElementById('chantierFixeInput');
+  if(fixeInput) fixeInput.value=data.chantierFixe||'';
   document.getElementById('userForm').scrollIntoView({behavior:'smooth'});
 }
 
@@ -4702,6 +4719,14 @@ function updateChantierSelect(){
     const full=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
     const siens=full.filter(c=>c.chef===currentUser||c.name===currentUser).map(c=>c.name);
     if(siens.length) list=siens;
+  }
+  // Particulier : uniquement son chantier assigné (fixe)
+  if(currentRole==='particulier'){
+    const userData=getAllUsers()[currentUser];
+    const chantierFixe=userData&&userData.chantierFixe?userData.chantierFixe:currentUser;
+    sel.innerHTML=`<option value="${chantierFixe}" selected>${chantierFixe}</option>`;
+    sel.disabled=true;
+    return;
   }
   // Conducteur : voit tous les chantiers (peut remplacer un collègue)
   list.forEach(name=>{
@@ -4964,11 +4989,17 @@ function listenOrders(){
 function getVisibleOrders(all){
   if(currentRole==='admin'||currentRole==='comptable') return all;
   if(currentRole==='conducteur'){
-    // Conducteur voit uniquement les commandes des chantiers qui lui sont attribués
+    // Conducteur voit ses commandes + toutes les commandes des particuliers
     const chantiersFull=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
     const mesChantiersNoms=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
-    return all.filter(o=>mesChantiersNoms.includes(o.chantier));
+    const allUsers=getAllUsers();
+    const particulierChantiers=Object.values(allUsers)
+      .filter(u=>u.role==='particulier'&&u.chantierFixe)
+      .map(u=>u.chantierFixe);
+    const visibleChantiers=[...new Set([...mesChantiersNoms,...particulierChantiers])];
+    return all.filter(o=>o.user===currentUser||visibleChantiers.includes(o.chantier));
   }
+  // Particulier et chef : uniquement ses propres commandes
   return all.filter(o=>o.user===currentUser);
 }
 function renderOrders(){
@@ -5319,18 +5350,22 @@ function renderSuivi(){
 
   // Filter by role
   let orders=all;
-  if(currentRole==='chef'){
+  if(currentRole==='chef'||currentRole==='particulier'){
     orders=all.filter(o=>o.user===currentUser);
   } else if(currentRole==='conducteur'){
     const chantiersFull=getChantiersFull();
     const myChantiers=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
-    // Ses propres commandes + commandes sur ses chantiers
-    orders=all.filter(o=>o.user===currentUser||myChantiers.includes(o.chantier));
+    const allUsers=getAllUsers();
+    const particulierChantiers=Object.values(allUsers)
+      .filter(u=>u.role==='particulier'&&u.chantierFixe)
+      .map(u=>u.chantierFixe);
+    const visibleChantiers=[...new Set([...myChantiers,...particulierChantiers])];
+    orders=all.filter(o=>o.user===currentUser||visibleChantiers.includes(o.chantier));
   }
 
   if(!orders.length){el.innerHTML='<div class="suivi-empty">📭 Aucune commande pour le moment</div>';return;}
 
-  const title=currentRole==='chef'?'📋 Mes commandes':currentRole==='conducteur'?'🏗️ Commandes de mes chantiers':'🏗️ Suivi par chantier';
+  const title=currentRole==='chef'||currentRole==='particulier'?'📋 Mes commandes':currentRole==='conducteur'?'🏗️ Commandes de mes chantiers':'🏗️ Suivi par chantier';
 
   const grouped={};
   orders.forEach(o=>{
@@ -6494,15 +6529,14 @@ function importRefsFourn(event){
           if(!row[0]||row[0]===0) return;
           try{
             const code=String(Math.round(parseFloat(String(row[0]))));
-            const prix=row[4]!==''&&row[4]!==null?String(parseFloat(String(row[4])).toFixed(2)):'';
-            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim(),prix};
+            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim()};
           }catch(ex){}
         });
       }
       // Start with all articles from reference sheet
       const updates={};
       Object.entries(refData).forEach(function(e){
-        updates[e[0]]={fournisseur:e[1].fournisseur,code_fourn:e[1].code_fourn,prix:e[1].prix||''};
+        updates[e[0]]={fournisseur:e[1].fournisseur,code_fourn:e[1].code_fourn,prix:''};
       });
       // Enrich with prix from category sheets
       let count=0;
