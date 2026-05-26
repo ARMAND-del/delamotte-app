@@ -6494,14 +6494,15 @@ function importRefsFourn(event){
           if(!row[0]||row[0]===0) return;
           try{
             const code=String(Math.round(parseFloat(String(row[0]))));
-            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim()};
+            const prix=row[4]!==''&&row[4]!==null?String(parseFloat(String(row[4])).toFixed(2)):'';
+            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim(),prix};
           }catch(ex){}
         });
       }
       // Start with all articles from reference sheet
       const updates={};
       Object.entries(refData).forEach(function(e){
-        updates[e[0]]={fournisseur:e[1].fournisseur,code_fourn:e[1].code_fourn,prix:''};
+        updates[e[0]]={fournisseur:e[1].fournisseur,code_fourn:e[1].code_fourn,prix:e[1].prix||''};
       });
       // Enrich with prix from category sheets
       let count=0;
