@@ -4527,6 +4527,9 @@ function updatePermissionsFromRole(){
   });
   const block=document.getElementById('chantierFixeBlock');
   if(block) block.style.display=isParticulier?'block':'none';
+  const fixeInput=document.getElementById('chantierFixeInput');
+  if(fixeInput&&isParticulier&&!fixeInput.value) fixeInput.value='001 Particulier';
+  if(fixeInput&&!isParticulier) fixeInput.value='';
 }
 
 function renderUsers(){
