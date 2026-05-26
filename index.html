@@ -638,13 +638,14 @@ const db = firebase.firestore();
 <div class="cart-panel" id="cartPanel" onclick="closeCartOutside(event)">
   <div class="cart-content">
     <div class="cart-header"><h2>&#128722; Mon Panier</h2><button class="btn-close-cart" onclick="closeCart()">&#10005;</button></div>
-    <div class="cart-meta">
+    <div class="cart-meta" id="cartMeta">
+      <!-- Champs normaux (cachés pour particulier) -->
       <select id="cartChantier" style="padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;width:100%;background:var(--white);color:var(--text);">
         <option value="">-- Sélectionner un chantier *--</option>
       </select>
       <input type="text" id="cartChef" placeholder="Chef de chantier *">
       <!-- Lieu de livraison -->
-      <div style="display:flex;gap:8px;margin-top:4px;">
+      <div id="livraisonBlock" style="display:flex;gap:8px;margin-top:4px;">
         <label style="flex:1;cursor:pointer;">
           <div id="livraisonEntreprise" onclick="setLivraison('entreprise')" style="padding:10px;border:2px solid var(--blue);border-radius:8px;text-align:center;font-size:0.85rem;font-weight:700;color:var(--blue);background:var(--blue-light);">
             🏭 Entreprise
@@ -657,6 +658,8 @@ const db = firebase.firestore();
         </label>
       </div>
       <input type="hidden" id="cartLivraison" value="entreprise">
+      <!-- Champ particulier uniquement -->
+      <input type="text" id="cartNomParticulier" placeholder="Nom du chantier" style="display:none;grid-column:span 2;">
       <textarea id="cartComment" rows="2" placeholder="Commentaire (optionnel)"></textarea>
     </div>
     <div class="cart-items" id="cartItems"></div>
@@ -4896,6 +4899,8 @@ function clearCart(){
   cart=[];updateCartCount();
   document.getElementById('cartChantier').value='';
   document.getElementById('cartComment').value='';
+  const nomEl=document.getElementById('cartNomParticulier');
+  if(nomEl) nomEl.value='';
   setLivraison('entreprise');
   localStorage.removeItem('delamotte_cart_'+currentUser);
 }
@@ -4919,7 +4924,23 @@ function updateCartCount(){
     bnav.style.display=total>0?'flex':'none';
   }
 }
-function openCart(){updateChantierSelect();renderCartItems();document.getElementById('cartPanel').classList.add('open');}
+function openCart(){
+  updateChantierSelect();
+  renderCartItems();
+  const isParticulier=currentRole==='particulier';
+  document.getElementById('cartChantier').style.display=isParticulier?'none':'';
+  document.getElementById('livraisonBlock').style.display=isParticulier?'none':'';
+  if(isParticulier){
+    document.getElementById('cartChef').placeholder='Nom du chantier *';
+    document.getElementById('cartChef').readOnly=false;
+    document.getElementById('cartChef').style.background='';
+    document.getElementById('cartChef').style.color='';
+  } else {
+    document.getElementById('cartChef').placeholder='Chef de chantier *';
+  }
+  document.getElementById('cartNomParticulier').style.display='none';
+  document.getElementById('cartPanel').classList.add('open');
+}
 function closeCart(){document.getElementById('cartPanel').classList.remove('open');}
 function closeCartOutside(e){if(e.target===document.getElementById('cartPanel'))closeCart();}
 function renderCartItems(){
@@ -4953,10 +4974,14 @@ function setLivraison(val){
 }
 
 function sendOrder(){
-  const chantier=document.getElementById('cartChantier').value.trim();
-  const chef=currentRole==='admin'?document.getElementById('cartChef').value.trim():currentUser;
+  const isParticulier=currentRole==='particulier';
+  const userData=getAllUsers()[currentUser];
+  const chantier=isParticulier?(userData&&userData.chantierFixe?userData.chantierFixe:'001 Particulier'):document.getElementById('cartChantier').value.trim();
+  const chef=currentRole==='admin'?document.getElementById('cartChef').value.trim():document.getElementById('cartChef').value.trim()||currentUser;
   const comment=document.getElementById('cartComment').value.trim();
-  if(!chantier||!cart.length){showToast('Renseignez le chantier et ajoutez des articles');return;}
+  if(!isParticulier&&(!chantier||!cart.length)){showToast('Renseignez le chantier et ajoutez des articles');return;}
+  if(isParticulier&&(!chef||!cart.length)){showToast('Renseignez le nom du chantier et ajoutez des articles');return;}
+  if(!cart.length){showToast('Ajoutez des articles au panier');return;}
   const date=new Date().toLocaleString('fr-FR');
   // Get next sequential number from Firebase
   db.collection('meta').doc('counter').get().then(doc=>{
