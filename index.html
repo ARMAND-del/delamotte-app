@@ -5072,7 +5072,7 @@ function renderOrders(){
         <span class="order-id">${o.id}</span>
         <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitee':'En attente'}</span>
       </div>
-      <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
+      <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${o.user&&getAllUsers()[o.user]&&getAllUsers()[o.user].role==='particulier'?'<span style="background:#f3e5f5;color:#8e44ad;padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">🏠 '+o.user+'</span>':''} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
       ${o.dateLivraison?`<div class="order-info" style="color:var(--green);font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
       <div class="order-actions">
