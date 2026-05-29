@@ -4732,6 +4732,7 @@ function saveEditChantier(){
 function updateChantierSelect(){
   const sel=document.getElementById('cartChantier');
   if(!sel)return;
+  sel.disabled=false;
   const current=sel.value;
   sel.innerHTML='<option value="">-- Sélectionner un chantier * --</option>';
   let list=getChantiers();
@@ -4749,7 +4750,7 @@ function updateChantierSelect(){
     sel.disabled=true;
     return;
   }
-  // Conducteur : voit tous les chantiers (peut remplacer un collègue)
+  // Conducteur : voit tous les chantiers
   list.forEach(name=>{
     const opt=document.createElement('option');
     opt.value=name;opt.textContent=name;
