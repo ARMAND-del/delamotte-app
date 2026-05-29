@@ -4992,7 +4992,7 @@ function sendOrder(){
   const userData=getAllUsers()[currentUser];
   const chantier=isParticulier?(userData&&userData.chantierFixe?userData.chantierFixe:'001 Particulier'):document.getElementById('cartChantier').value.trim();
   const chef=isParticulier
-    ? document.getElementById('cartNomParticulier').value.trim()
+    ? (document.getElementById('cartNomParticulier')?document.getElementById('cartNomParticulier').value.trim():'')
     : (currentRole==='admin'?document.getElementById('cartChef').value.trim():currentUser);
   const comment=document.getElementById('cartComment').value.trim();
   if(!cart.length){showToast('Ajoutez des articles au panier');return;}
