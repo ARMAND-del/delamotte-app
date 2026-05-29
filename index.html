@@ -4439,7 +4439,12 @@ function startSession(u){
   document.getElementById('app').style.display='flex';
   const roleIcon=currentRole==='admin'?' 🔑':currentRole==='conducteur'?' 🦺':currentRole==='comptable'?' 📊':currentRole==='particulier'?' 🏠':'';
   document.getElementById('userBadge').textContent=u+roleIcon;
-  if(currentRole==='chef') document.getElementById('cartChef').value=u;
+  if(currentRole==='chef'||currentRole==='conducteur'||currentRole==='comptable') {
+    document.getElementById('cartChef').value=u;
+    document.getElementById('cartChef').readOnly=true;
+    document.getElementById('cartChef').style.background='var(--gray)';
+    document.getElementById('cartChef').style.color='var(--muted)';
+  }
 
   // Apply permissions
   const perms=getPermissions(USERS[u]);
@@ -4980,7 +4985,7 @@ function sendOrder(){
   const chef=currentRole==='admin'?document.getElementById('cartChef').value.trim():document.getElementById('cartChef').value.trim()||currentUser;
   const comment=document.getElementById('cartComment').value.trim();
   if(!isParticulier&&(!chantier||!cart.length)){showToast('Renseignez le chantier et ajoutez des articles');return;}
-  if(isParticulier&&(!chef||!cart.length)){showToast('Renseignez le nom du chantier et ajoutez des articles');return;}
+  if(isParticulier&&!chef){showToast('Renseignez le nom du chantier');return;}
   if(!cart.length){showToast('Ajoutez des articles au panier');return;}
   const date=new Date().toLocaleString('fr-FR');
   // Get next sequential number from Firebase
@@ -6205,7 +6210,7 @@ function printOrder(id){
   </div>
   <div class="meta">
     <div><div class="ml">CHANTIER</div><div class="mv">${o.chantier}</div></div>
-    <div><div class="ml">CHEF DE CHANTIER</div><div class="mv">${o.chef}</div></div>
+    <div><div class="ml">${o.user&&getAllUsers()[o.user]&&getAllUsers()[o.user].role==='particulier'?'NOM DU CHANTIER':'CHEF DE CHANTIER'}</div><div class="mv">${o.chef}</div></div>
     <div><div class="ml">STATUT</div><div class="mv">${o.status==='done'?'Traitee':'En attente'}</div></div>
     ${o.dateLivraison?`<div><div class="ml">LIVRAISON ESTIMÉE</div><div class="mv" style="color:#27ae60">📅 ${o.dateLivraison}</div></div>`:''}
     ${o.comment?`<div><div class="ml">COMMENTAIRE</div><div class="mv">${o.comment}</div></div>`:''}
