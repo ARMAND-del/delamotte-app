@@ -4995,9 +4995,9 @@ function sendOrder(){
     ? document.getElementById('cartNomParticulier').value.trim()
     : (currentRole==='admin'?document.getElementById('cartChef').value.trim():currentUser);
   const comment=document.getElementById('cartComment').value.trim();
-  if(!isParticulier&&(!chantier||!cart.length)){showToast('Renseignez le chantier et ajoutez des articles');return;}
-  if(isParticulier&&!chef){showToast('Renseignez le nom du chantier');return;}
   if(!cart.length){showToast('Ajoutez des articles au panier');return;}
+  if(!isParticulier&&!chantier){showToast('Renseignez le chantier');return;}
+  if(isParticulier&&!chef){showToast('Renseignez le nom du chantier');return;}
   const date=new Date().toLocaleString('fr-FR');
   // Get next sequential number from Firebase
   db.collection('meta').doc('counter').get().then(doc=>{
