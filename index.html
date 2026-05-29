@@ -4997,14 +4997,22 @@ function sendOrder(){
   const comment=document.getElementById('cartComment').value.trim();
   if(!cart.length){showToast('Ajoutez des articles au panier');return;}
   if(!isParticulier&&!chantier){showToast('Renseignez le chantier');return;}
-  if(isParticulier&&!chef){showToast('Renseignez le nom du chantier');return;}
+  if(isParticulier){
+    const nomChantier=document.getElementById('cartNomParticulier');
+    const val=nomChantier?nomChantier.value.trim():'';
+    if(!val){
+      if(nomChantier){nomChantier.style.borderColor='var(--red)';nomChantier.focus();}
+      showToast('⚠️ Renseignez le nom du chantier !');
+      return;
+    }
+  }
   const date=new Date().toLocaleString('fr-FR');
   // Get next sequential number from Firebase
   db.collection('meta').doc('counter').get().then(doc=>{
     const current=(doc.exists?doc.data().count:0)+1;
     const id='CMD-'+String(current).padStart(4,'0');
     const livraison=document.getElementById('cartLivraison')?.value||'entreprise';
-    const order={id,chantier,chef:chef||currentUser,date,comment,livraison,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
+    const order={id,chantier,chef:chef,date,comment,livraison,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
     const batch=db.batch();
     batch.set(db.collection('orders').doc(id),order);
     batch.set(db.collection('meta').doc('counter'),{count:current});
