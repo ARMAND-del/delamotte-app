@@ -5011,15 +5011,88 @@ function filterProducts(){
   const items=allItems.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||p.code.toLowerCase().includes(q)||p.nom.toLowerCase().includes(q)));
   const g=document.getElementById('productsGrid');
   const countEl=document.getElementById('searchCount');
+
+  // Build variant groups from IMG_MAP
+  const imgGroups={};
+  allItems.forEach(p=>{
+    const num=IMG_MAP[p.code];
+    if(!num) return;
+    if(!imgGroups[num]) imgGroups[num]=[];
+    imgGroups[num].push(p);
+  });
+
+  // Determine which items are variants (same image, 2+ items, same category)
+  const variantLeaders=new Set(); // first code of each variant group
+  const variantMembers=new Set(); // all codes that are part of a variant group (non-leaders)
+  Object.values(imgGroups).forEach(group=>{
+    if(group.length < 2) return;
+    // Only group if all items have same category
+    const cats=new Set(group.map(p=>p.cat));
+    if(cats.size !== 1) return;
+    // Check if all items in group are in current filter
+    const inFilter=group.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||p.code.toLowerCase().includes(q)||p.nom.toLowerCase().includes(q)));
+    if(inFilter.length < 2) return; // don't group if only 1 visible
+    // Sort by code
+    inFilter.sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true}));
+    variantLeaders.add(inFilter[0].code);
+    inFilter.slice(1).forEach(p=>variantMembers.add(p.code));
+  });
+
   if(countEl) countEl.textContent=q||currentCat!=='Toutes'?`${items.length} article(s) trouvé(s)`:'';
   if(!items.length){g.innerHTML='<p style="color:var(--muted);grid-column:1/-1;padding:20px;text-align:center">Aucun article trouve</p>';return;}
   const icon=c=>CAT_ICON[c]||'\uD83D\uDCE6';
-  g.innerHTML=items.map(p=>{
+
+  g.innerHTML=items.filter(p=>!variantMembers.has(p.code)).map(p=>{
     const ic=icon(p.cat);
     const imgSrc=imgPath(null,p.code);
     const imgHtml=imgSrc
       ? `<img src="${imgSrc}" alt="${p.nom}" onerror="this.outerHTML='<span class=picon>${ic}</span>'">`
       : `<span class="picon">${ic}</span>`;
+
+    // Check if this is a variant leader
+    if(variantLeaders.has(p.code)){
+      const num=IMG_MAP[p.code];
+      const group=imgGroups[num]
+        .filter(x=>(currentCat==='Toutes'||x.cat===currentCat)&&(!q||x.code.toLowerCase().includes(q)||x.nom.toLowerCase().includes(q)))
+        .sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true}));
+
+      // Extract generic name (remove dimension at end)
+      const firstName=group[0].nom;
+      const lastName=group[group.length-1].nom;
+      // Find common prefix
+      let commonLen=0;
+      for(let i=0;i<Math.min(firstName.length,lastName.length);i++){
+        if(firstName[i]===lastName[i]) commonLen=i+1; else break;
+      }
+      const genericName=firstName.substring(0,commonLen).trim().replace(/\s+\S*$/,'').trim()||firstName;
+
+      // Extract dimensions (suffix after common prefix)
+      const options=group.map(x=>{
+        const dim=x.nom.substring(genericName.length).trim();
+        return {code:x.code,nom:x.nom,dim:dim||x.nom};
+      });
+
+      const selectId='var_'+p.code;
+      const stockHtml=currentRole==='admin'?(()=>{const q=stockCache[p.code];if(q===undefined||q===null)return '';if(q===0)return '<div style="font-size:0.7rem;color:var(--red);font-weight:600;margin-bottom:4px">❌ Rupture</div>';if(q<=invSeuilAlerte)return `<div style="font-size:0.7rem;color:var(--orange);font-weight:600;margin-bottom:4px">⚠️ Stock: ${q}</div>`;return `<div style="font-size:0.7rem;color:var(--green);font-weight:600;margin-bottom:4px">✅ Stock: ${q}</div>`;})():'';
+
+      return `<div class="product-card">
+        <div class="product-img-wrap">${imgHtml}</div>
+        <div class="product-code" id="vcode_${p.code}">${group[0].code}</div>
+        <div class="product-name">${genericName}</div>
+        ${stockHtml}
+        <select id="${selectId}" onchange="onVariantChange('${p.code}')" style="width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;margin-bottom:6px;background:var(--white);color:var(--text);">
+          ${options.map(o=>`<option value="${o.code}" data-nom="${o.nom.replace(/"/g,'&quot;')}">${o.dim}</option>`).join('')}
+        </select>
+        <div class="qty-control">
+          <button class="qty-btn" onclick="changeQty('v_${p.code}',-1)">&#8722;</button>
+          <input class="qty-input" type="number" min="1" value="1" id="qty_v_${p.code}">
+          <button class="qty-btn" onclick="changeQty('v_${p.code}',1)">+</button>
+        </div>
+        <button class="btn-add" onclick="addVariantToCart('${p.code}')">&#10133; Ajouter</button>
+      </div>`;
+    }
+
+    // Normal card
     return `<div class="product-card">
       <div class="product-img-wrap">${imgHtml}</div>
       <div class="product-code">${p.code}</div>
@@ -5033,6 +5106,30 @@ function filterProducts(){
       <button class="btn-add" onclick="addToCart('${p.code}','${p.nom.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">&#10133; Ajouter</button>
     </div>`;
   }).join('');
+}
+
+function onVariantChange(leadCode){
+  const sel=document.getElementById('var_'+leadCode);
+  if(!sel) return;
+  const selectedCode=sel.value;
+  const codeEl=document.getElementById('vcode_'+leadCode);
+  if(codeEl) codeEl.textContent=selectedCode;
+}
+
+function addVariantToCart(leadCode){
+  const sel=document.getElementById('var_'+leadCode);
+  if(!sel) return;
+  const selectedCode=sel.value;
+  const selectedOpt=sel.options[sel.selectedIndex];
+  const nom=selectedOpt?selectedOpt.getAttribute('data-nom'):'';
+  const qty=parseInt(document.getElementById('qty_v_'+leadCode)?.value)||1;
+  const idx=cart.findIndex(x=>x.code===selectedCode);
+  if(idx>=0) cart[idx].qty+=qty; else cart.push({code:selectedCode,nom,qty});
+  updateCartCount();
+  showToast('\u2705 '+nom+' ajoute (x'+qty+')');
+  animateCartBtn();
+  document.getElementById('qty_v_'+leadCode).value=1;
+  saveCart();
 }
 function changeQty(code,d){const i=document.getElementById('qty_'+code);if(i)i.value=Math.max(1,(parseInt(i.value)||1)+d);}
 function saveCart(){
