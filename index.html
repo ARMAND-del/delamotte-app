@@ -5138,10 +5138,15 @@ function filterProducts(){
       }
       const genericName=genericRaw.trim()||firstName;
 
-      // Extract dimensions (suffix after common prefix)
+      // Extract dimensions (suffix after common prefix) - use effective name
       const options=group.map(x=>{
-        const dim=x.nom.substring(genericName.length).trim();
-        return {code:x.code,nom:x.nom,dim:dim||x.nom};
+        const effectiveNom=getEffectiveName(x.code,x.nom);
+        // Recalculate generic from effective names
+        const effectiveGeneric=getEffectiveName(group[0].code,genericName);
+        const dim=effectiveNom.startsWith(effectiveGeneric)
+          ? effectiveNom.substring(effectiveGeneric.length).trim()
+          : effectiveNom;
+        return {code:x.code,nom:effectiveNom,dim:dim||effectiveNom};
       });
 
       const selectId='var_'+p.code;
