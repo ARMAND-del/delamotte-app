@@ -4565,6 +4565,16 @@ function imgPath(n,code){
   return 'image'+num+'.png';
 }
 
+function editVariantNomFromBtn(btn){
+  const selectId=btn.getAttribute('data-select');
+  const sel=document.getElementById(selectId);
+  if(!sel) return;
+  const selectedCode=sel.value;
+  const selectedOpt=sel.options[sel.selectedIndex];
+  const currentNom=selectedOpt?selectedOpt.getAttribute('data-nom'):selectedCode;
+  openEditNomModal(selectedCode, currentNom);
+}
+
 function editNomFromBtn(btn){
   const code=btn.getAttribute('data-code');
   const allItems=[...CATALOGUE,...customRefsCache];
@@ -5140,9 +5150,12 @@ function filterProducts(){
         ${BARRE_LONGUEURS[group[0].code]?`<div style="font-size:0.72rem;color:var(--blue);font-weight:600;margin-bottom:3px">📏 Barre ${BARRE_LONGUEURS[group[0].code]}m — qté en barres</div>`:''}
         ${currentRole==='admin'?`<button data-code="${group[0].code}" onclick="editNomFromBtn(this)" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>`:''}
         ${stockHtml}
-        <select id="${selectId}" onchange="onVariantChange('${p.code}')" style="width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;margin-bottom:6px;background:var(--white);color:var(--text);">
-          ${options.map(o=>`<option value="${o.code}" data-nom="${getEffectiveName(o.code,o.nom).replace(/"/g,'&quot;')}">${o.dim}</option>`).join('')}
-        </select>
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:6px;">
+          <select id="${selectId}" onchange="onVariantChange('${p.code}')" style="flex:1;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;background:var(--white);color:var(--text);">
+            ${options.map(o=>`<option value="${o.code}" data-nom="${getEffectiveName(o.code,o.nom).replace(/"/g,'&quot;')}">${o.dim}</option>`).join('')}
+          </select>
+          ${currentRole==='admin'?`<button data-select="${selectId}" onclick="editVariantNomFromBtn(this)" title="Modifier la désignation de l'article sélectionné" style="background:none;border:1.5px solid var(--border);border-radius:6px;padding:4px 6px;cursor:pointer;font-size:0.82rem;flex-shrink:0;">✏️</button>`:''}
+        </div>
         <div class="qty-control">
           <button class="qty-btn" onclick="changeQty('v_${p.code}',-1)">&#8722;</button>
           <input class="qty-input" type="number" min="1" value="1" id="qty_v_${p.code}">
