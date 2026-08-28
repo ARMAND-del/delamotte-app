@@ -4563,8 +4563,40 @@ function imgPath(n,code){
   return 'image'+num+'.png';
 }
 
+function getEffectiveName(code, originalNom){
+  return customNamesCache[code] || originalNom;
+}
+
+function listenCustomNames(){
+  db.collection('custom_names').onSnapshot(snap=>{
+    customNamesCache={};
+    snap.docs.forEach(d=>{
+      customNamesCache[d.id]=d.data().nom;
+    });
+    filterProducts();
+  });
+}
+
+function openEditNomModal(code, currentNom){
+  const newNom = prompt(`Modifier la désignation de ${code} :`, currentNom);
+  if(newNom===null) return; // annulé
+  const nom = newNom.trim();
+  if(!nom){showToast('La désignation ne peut pas être vide');return;}
+  db.collection('custom_names').doc(code).set({nom,updatedAt:new Date().toISOString()})
+    .then(()=>showToast('✅ Désignation modifiée'))
+    .catch(()=>showToast('Erreur'));
+}
+
+function resetNom(code){
+  if(!confirm('Remettre la désignation originale ?')) return;
+  db.collection('custom_names').doc(code).delete()
+    .then(()=>showToast('✅ Désignation réinitialisée'))
+    .catch(()=>showToast('Erreur'));
+}
+
 let customImagesCache={}; // code -> base64 data URL
 let customRefsCache=[]; // [{code,nom,cat}]
+let customNamesCache={}; // code -> nom personnalisé
 
 function listenCustomRefs(){
   db.collection('custom_refs').onSnapshot(snap=>{
@@ -4647,6 +4679,7 @@ function startSession(u){
   listenReapproStock();
   loadRefsFournFromFirebase();
   listenCustomRefs();
+  listenCustomNames();
   // Restore saved cart
   setTimeout(loadCart, 800);
 }
@@ -5078,10 +5111,11 @@ function filterProducts(){
       return `<div class="product-card">
         <div class="product-img-wrap">${imgHtml}</div>
         <div class="product-code" id="vcode_${p.code}">${group[0].code}</div>
-        <div class="product-name">${genericName}</div>
+        <div class="product-name">${getEffectiveName(group[0].code,genericName)}</div>
+        ${currentRole==='admin'?`<button onclick="openEditNomModal('${group[0].code}','${getEffectiveName(group[0].code,genericName).replace(/'/g,\"\\\\'\")}'); return false;" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>`:''}
         ${stockHtml}
         <select id="${selectId}" onchange="onVariantChange('${p.code}')" style="width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;margin-bottom:6px;background:var(--white);color:var(--text);">
-          ${options.map(o=>`<option value="${o.code}" data-nom="${o.nom.replace(/"/g,'&quot;')}">${o.dim}</option>`).join('')}
+          ${options.map(o=>`<option value="${o.code}" data-nom="${getEffectiveName(o.code,o.nom).replace(/"/g,'&quot;')}">${o.dim}</option>`).join('')}
         </select>
         <div class="qty-control">
           <button class="qty-btn" onclick="changeQty('v_${p.code}',-1)">&#8722;</button>
@@ -5096,14 +5130,15 @@ function filterProducts(){
     return `<div class="product-card">
       <div class="product-img-wrap">${imgHtml}</div>
       <div class="product-code">${p.code}</div>
-      <div class="product-name">${p.nom}</div>
+      <div class="product-name">${getEffectiveName(p.code,p.nom)}</div>
+      ${currentRole==='admin'?`<button onclick="openEditNomModal('${p.code}','${getEffectiveName(p.code,p.nom).replace(/'/g,'&apos;')}'); return false;" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>`:''}
       ${currentRole==='admin'?(()=>{const q=stockCache[p.code];if(q===undefined||q===null)return '';if(q===0)return '<div style="font-size:0.7rem;color:var(--red);font-weight:600;margin-bottom:4px">❌ Rupture</div>';if(q<=invSeuilAlerte)return `<div style="font-size:0.7rem;color:var(--orange);font-weight:600;margin-bottom:4px">⚠️ Stock: ${q}</div>`;return `<div style="font-size:0.7rem;color:var(--green);font-weight:600;margin-bottom:4px">✅ Stock: ${q}</div>`;})():''}
       <div class="qty-control">
         <button class="qty-btn" onclick="changeQty('${p.code}',-1)">&#8722;</button>
         <input class="qty-input" type="number" min="1" value="1" id="qty_${p.code}">
         <button class="qty-btn" onclick="changeQty('${p.code}',1)">+</button>
       </div>
-      <button class="btn-add" onclick="addToCart('${p.code}','${p.nom.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">&#10133; Ajouter</button>
+      <button class="btn-add" onclick="addToCart('${p.code}','${getEffectiveName(p.code,p.nom).replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">&#10133; Ajouter</button>
     </div>`;
   }).join('');
 }
