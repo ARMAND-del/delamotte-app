@@ -4604,16 +4604,12 @@ function listenCustomNames(){
 
 function openEditNomModal(code, currentNom){
   const newNom = prompt(`Modifier la désignation de ${code} :`, currentNom);
-  if(newNom===null) return;
+  if(newNom===null) return; // annulé
   const nom = newNom.trim();
   if(!nom){showToast('La désignation ne peut pas être vide');return;}
-  // Update local cache immediately for instant UI refresh
-  customNamesCache[code]=nom;
-  filterProducts();
-  // Then persist to Firebase
   db.collection('custom_names').doc(code).set({nom,updatedAt:new Date().toISOString()})
     .then(()=>showToast('✅ Désignation modifiée'))
-    .catch(()=>{showToast('Erreur sauvegarde');delete customNamesCache[code];filterProducts();});
+    .catch(()=>showToast('Erreur'));
 }
 
 function resetNom(code){
@@ -5138,20 +5134,10 @@ function filterProducts(){
       }
       const genericName=genericRaw.trim()||firstName;
 
-      // Extract dimensions (suffix after common prefix) - use effective name
+      // Extract dimensions (suffix after common prefix)
       const options=group.map(x=>{
-        const effectiveNom=getEffectiveName(x.code,x.nom);
-        const effectiveGeneric=getEffectiveName(group[0].code,genericName);
-        // Try to extract suffix after genericName (original) or effectiveGeneric
-        let dim='';
-        if(effectiveNom.toLowerCase().startsWith(genericName.toLowerCase())){
-          dim=effectiveNom.substring(genericName.length).trim();
-        } else if(effectiveNom.toLowerCase().startsWith(effectiveGeneric.toLowerCase())){
-          dim=effectiveNom.substring(effectiveGeneric.length).trim();
-        } else {
-          dim=effectiveNom;
-        }
-        return {code:x.code,nom:effectiveNom,dim:dim||effectiveNom};
+        const dim=x.nom.substring(genericName.length).trim();
+        return {code:x.code,nom:x.nom,dim:dim||x.nom};
       });
 
       const selectId='var_'+p.code;
