@@ -4563,6 +4563,10 @@ function imgPath(n,code){
   return 'image'+num+'.png';
 }
 
+function editNom(code, currentNom){
+  openEditNomModal(code, currentNom);
+}
+
 function getEffectiveName(code, originalNom){
   return customNamesCache[code] || originalNom;
 }
@@ -5112,7 +5116,7 @@ function filterProducts(){
         <div class="product-img-wrap">${imgHtml}</div>
         <div class="product-code" id="vcode_${p.code}">${group[0].code}</div>
         <div class="product-name">${getEffectiveName(group[0].code,genericName)}</div>
-        ${currentRole==='admin'?`<button onclick="openEditNomModal('${group[0].code}','${getEffectiveName(group[0].code,genericName).replace(/'/g,\"\\\\'\")}'); return false;" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>`:''}
+        ${currentRole==='admin'?'<button onclick="editNom(\''+group[0].code+'\',\''+getEffectiveName(group[0].code,genericName).replace(/\'/g,\'\\\'\')+'\')" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>':''}
         ${stockHtml}
         <select id="${selectId}" onchange="onVariantChange('${p.code}')" style="width:100%;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:0.82rem;margin-bottom:6px;background:var(--white);color:var(--text);">
           ${options.map(o=>`<option value="${o.code}" data-nom="${getEffectiveName(o.code,o.nom).replace(/"/g,'&quot;')}">${o.dim}</option>`).join('')}
@@ -5131,7 +5135,7 @@ function filterProducts(){
       <div class="product-img-wrap">${imgHtml}</div>
       <div class="product-code">${p.code}</div>
       <div class="product-name">${getEffectiveName(p.code,p.nom)}</div>
-      ${currentRole==='admin'?`<button onclick="openEditNomModal('${p.code}','${getEffectiveName(p.code,p.nom).replace(/'/g,'&apos;')}'); return false;" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>`:''}
+      ${currentRole==='admin'?'<button onclick="editNom(\''+p.code+'\',\''+getEffectiveName(p.code,p.nom).replace(/\'/g,\'\\\'\')+'\')" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>':''}
       ${currentRole==='admin'?(()=>{const q=stockCache[p.code];if(q===undefined||q===null)return '';if(q===0)return '<div style="font-size:0.7rem;color:var(--red);font-weight:600;margin-bottom:4px">❌ Rupture</div>';if(q<=invSeuilAlerte)return `<div style="font-size:0.7rem;color:var(--orange);font-weight:600;margin-bottom:4px">⚠️ Stock: ${q}</div>`;return `<div style="font-size:0.7rem;color:var(--green);font-weight:600;margin-bottom:4px">✅ Stock: ${q}</div>`;})():''}
       <div class="qty-control">
         <button class="qty-btn" onclick="changeQty('${p.code}',-1)">&#8722;</button>
