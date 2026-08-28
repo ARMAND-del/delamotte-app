@@ -4604,12 +4604,16 @@ function listenCustomNames(){
 
 function openEditNomModal(code, currentNom){
   const newNom = prompt(`Modifier la désignation de ${code} :`, currentNom);
-  if(newNom===null) return; // annulé
+  if(newNom===null) return;
   const nom = newNom.trim();
   if(!nom){showToast('La désignation ne peut pas être vide');return;}
+  // Mise à jour immédiate du cache local
+  customNamesCache[code]=nom;
+  filterProducts();
+  // Sauvegarde Firebase
   db.collection('custom_names').doc(code).set({nom,updatedAt:new Date().toISOString()})
     .then(()=>showToast('✅ Désignation modifiée'))
-    .catch(()=>showToast('Erreur'));
+    .catch(()=>{showToast('Erreur sauvegarde');delete customNamesCache[code];filterProducts();});
 }
 
 function resetNom(code){
