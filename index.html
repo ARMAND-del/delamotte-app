@@ -5141,11 +5141,16 @@ function filterProducts(){
       // Extract dimensions (suffix after common prefix) - use effective name
       const options=group.map(x=>{
         const effectiveNom=getEffectiveName(x.code,x.nom);
-        // Recalculate generic from effective names
         const effectiveGeneric=getEffectiveName(group[0].code,genericName);
-        const dim=effectiveNom.startsWith(effectiveGeneric)
-          ? effectiveNom.substring(effectiveGeneric.length).trim()
-          : effectiveNom;
+        // Try to extract suffix after genericName (original) or effectiveGeneric
+        let dim='';
+        if(effectiveNom.toLowerCase().startsWith(genericName.toLowerCase())){
+          dim=effectiveNom.substring(genericName.length).trim();
+        } else if(effectiveNom.toLowerCase().startsWith(effectiveGeneric.toLowerCase())){
+          dim=effectiveNom.substring(effectiveGeneric.length).trim();
+        } else {
+          dim=effectiveNom;
+        }
         return {code:x.code,nom:effectiveNom,dim:dim||effectiveNom};
       });
 
