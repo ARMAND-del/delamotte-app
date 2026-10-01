@@ -6941,23 +6941,33 @@ function importRefsFourn(event){
           }catch(ex){}
         });
       }
-      // Update custom_names from reference sheet designations (batch par 400)
-      const nomEntries=Object.entries(refData).filter(function(e){return e[1].nom;});
-      let nomsCount=0;
+      // Update custom_names ONLY for names that differ from CATALOGUE base
+      const allItems=[...CATALOGUE,...customRefsCache];
+      const catalogueMap={};
+      allItems.forEach(function(p){catalogueMap[p.code]=p.nom;});
+      const changed=Object.entries(refData).filter(function(e){
+        const code=e[0];
+        const nom=e[1].nom;
+        if(!nom) return false;
+        const original=catalogueMap[code];
+        // Only update if different from original catalogue name
+        return original && nom !== original;
+      });
       function saveBatchNoms(entries,i){
-        if(i>=entries.length) return;
+        if(i>=entries.length){
+          if(i>0) showToast('✅ '+i+' désignations mises à jour');
+          return;
+        }
         const batch=db.batch();
-        const chunk=entries.slice(i,i+400);
-        chunk.forEach(function(entry){
+        entries.slice(i,i+400).forEach(function(entry){
           const code=entry[0];
           const nom=entry[1].nom;
           batch.set(db.collection('custom_names').doc(code),{nom,updatedAt:new Date().toISOString()});
           customNamesCache[code]=nom;
-          nomsCount++;
         });
         batch.commit().then(function(){saveBatchNoms(entries,i+400);}).catch(function(e){console.log('Erreur maj noms',e);});
       }
-      saveBatchNoms(nomEntries,0);
+      if(changed.length>0) saveBatchNoms(changed,0);
       // Start with all articles from reference sheet
       const updates={};
       Object.entries(refData).forEach(function(e){
