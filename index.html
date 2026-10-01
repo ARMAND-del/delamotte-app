@@ -6941,19 +6941,23 @@ function importRefsFourn(event){
           }catch(ex){}
         });
       }
-      // Update custom_names from reference sheet designations
-      const nomsBatch=db.batch();
+      // Update custom_names from reference sheet designations (batch par 400)
+      const nomEntries=Object.entries(refData).filter(function(e){return e[1].nom;});
       let nomsCount=0;
-      Object.entries(refData).forEach(function(entry){
-        const code=entry[0];
-        const nom=entry[1].nom;
-        if(nom){
-          nomsBatch.set(db.collection('custom_names').doc(code),{nom,updatedAt:new Date().toISOString()});
+      function saveBatchNoms(entries,i){
+        if(i>=entries.length) return;
+        const batch=db.batch();
+        const chunk=entries.slice(i,i+400);
+        chunk.forEach(function(entry){
+          const code=entry[0];
+          const nom=entry[1].nom;
+          batch.set(db.collection('custom_names').doc(code),{nom,updatedAt:new Date().toISOString()});
           customNamesCache[code]=nom;
           nomsCount++;
-        }
-      });
-      nomsBatch.commit().catch(function(){console.log('Erreur maj noms');});
+        });
+        batch.commit().then(function(){saveBatchNoms(entries,i+400);}).catch(function(e){console.log('Erreur maj noms',e);});
+      }
+      saveBatchNoms(nomEntries,0);
       // Start with all articles from reference sheet
       const updates={};
       Object.entries(refData).forEach(function(e){
