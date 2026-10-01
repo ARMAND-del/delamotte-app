@@ -6936,10 +6936,24 @@ function importRefsFourn(event){
           if(!row[0]||row[0]===0) return;
           try{
             const code=String(Math.round(parseFloat(String(row[0]))));
-            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim()};
+            const nom=String(row[1]||'').trim();
+            refData[code]={fournisseur:String(row[2]||'').trim(),code_fourn:String(row[3]||'').trim(),nom};
           }catch(ex){}
         });
       }
+      // Update custom_names from reference sheet designations
+      const nomsBatch=db.batch();
+      let nomsCount=0;
+      Object.entries(refData).forEach(function(entry){
+        const code=entry[0];
+        const nom=entry[1].nom;
+        if(nom){
+          nomsBatch.set(db.collection('custom_names').doc(code),{nom,updatedAt:new Date().toISOString()});
+          customNamesCache[code]=nom;
+          nomsCount++;
+        }
+      });
+      nomsBatch.commit().catch(function(){console.log('Erreur maj noms');});
       // Start with all articles from reference sheet
       const updates={};
       Object.entries(refData).forEach(function(e){
