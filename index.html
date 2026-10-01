@@ -6941,7 +6941,17 @@ function importRefsFourn(event){
           }catch(ex){}
         });
       }
-      // Update custom_names ONLY for names that differ from CATALOGUE base
+      // Build set of codes that share an image with others (variant groups) - exclude from custom_names
+      const imgCount={};
+      Object.entries(IMG_MAP).forEach(function(e){
+        const img=e[1];
+        imgCount[img]=(imgCount[img]||0)+1;
+      });
+      const variantCodes=new Set();
+      Object.entries(IMG_MAP).forEach(function(e){
+        if(imgCount[e[1]]>1) variantCodes.add(e[0]);
+      });
+      // Update custom_names ONLY for names that differ from CATALOGUE base AND are NOT variants
       const allItems=[...CATALOGUE,...customRefsCache];
       const catalogueMap={};
       allItems.forEach(function(p){catalogueMap[p.code]=p.nom;});
@@ -6949,8 +6959,8 @@ function importRefsFourn(event){
         const code=e[0];
         const nom=e[1].nom;
         if(!nom) return false;
+        if(variantCodes.has(code)) return false; // skip variant group members
         const original=catalogueMap[code];
-        // Only update if different from original catalogue name
         return original && nom !== original;
       });
       function saveBatchNoms(entries,i){
@@ -6968,6 +6978,21 @@ function importRefsFourn(event){
         batch.commit().then(function(){saveBatchNoms(entries,i+400);}).catch(function(e){console.log('Erreur maj noms',e);});
       }
       if(changed.length>0) saveBatchNoms(changed,0);
+      // Clean up any custom_names for variant codes (corrupted by previous imports)
+      const variantCodesArray=Array.from(variantCodes);
+      function cleanVariantNoms(arr,i){
+        if(i>=arr.length) return;
+        const batch=db.batch();
+        arr.slice(i,i+400).forEach(function(code){
+          if(customNamesCache[code]){
+            batch.delete(db.collection('custom_names').doc(code));
+            delete customNamesCache[code];
+          }
+        });
+        batch.commit().then(function(){cleanVariantNoms(arr,i+400);}).catch(function(){});
+      }
+      cleanVariantNoms(variantCodesArray,0);
+      filterProducts();
       // Start with all articles from reference sheet
       const updates={};
       Object.entries(refData).forEach(function(e){
