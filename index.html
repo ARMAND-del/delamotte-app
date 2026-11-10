@@ -134,6 +134,11 @@ const db = firebase.firestore();
   .chantier-picker{position:relative;width:100%;}
   .chantier-picker input{width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;}
   .retour-mode .cart-btn{background:#d35400;}
+  .imp-bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;}
+  .imp-btn{flex:1;min-width:140px;padding:9px 10px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:center;box-sizing:border-box;}
+  .imp-main{background:var(--blue-light);color:var(--blue);border:2px solid var(--blue);}
+  .imp-sec{background:var(--white);color:var(--muted);border:2px solid var(--border);}
+  .imp-result{display:none;margin:6px 0;padding:10px;border-radius:8px;font-size:0.78rem;background:#eafaf1;color:var(--text);overflow-wrap:anywhere;}
   .picker-field{position:relative;}
   .picker-field input{padding-right:42px;}
   .picker-arrow{position:absolute;right:0;top:0;bottom:0;width:40px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:0.8rem;}
@@ -373,7 +378,6 @@ const db = firebase.firestore();
     <button class="nav-tab" id="nav-tab-inventaire" style="display:none" onclick="showTab('inventaire')">📦 Inventaire</button>
     <button class="nav-tab" id="nav-tab-reappro" style="display:none" onclick="showTab('reappro')">🔄 Réappro</button>
     <button class="nav-tab" id="nav-tab-chantiers" style="display:none" onclick="showTab('chantiers')">🏗️ Chantiers</button>
-    <button class="nav-tab" id="nav-tab-dlm" style="display:none" onclick="showTab('dlm')">🛠️ DLM</button>
   </div>
   <div class="main">
     <div id="tabCatalogue">
@@ -423,7 +427,8 @@ const db = firebase.firestore();
             <option value="atelier">Atelier</option>
             <option value="admin">Admin (accès total)</option>
           </select>
-          <select id="newUserService" onchange="updatePermissionsFromRole()" style="display:none"><option value="gros">🔵 Gros chantier</option><option value="particulier">🔴 001 Particulier</option><option value="both">🔵🔴 Les 2 services</option></select>
+          <label id="newUserServiceLabel" style="display:none;grid-column:1/-1;font-size:0.78rem;font-weight:700;color:var(--muted);">Peut commander pour :</label>
+        <select id="newUserService" onchange="updatePermissionsFromRole()" style="display:none;grid-column:1/-1"><option value="gros">🔵 Gros chantier uniquement</option><option value="particulier">🔴 Service 001 Particulier uniquement</option><option value="both">🔵🔴 Les 2 services (gros chantier + 001)</option></select>
         <input type="hidden" id="editUserOrigName">
         </div>
         <div style="background:var(--blue-light);border-radius:10px;padding:12px;margin:10px 0;">
@@ -438,7 +443,6 @@ const db = firebase.firestore();
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_corbeille"> 🗑️ Corbeille</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_users"> 👤 Utilisateurs</label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_chantiers"> 🏗️ Chantiers 001</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_dlm"> 🛠️ DLM</label>
           </div>
           
         </div>
@@ -478,7 +482,6 @@ const db = firebase.firestore();
     <div id="reapproContent"></div>
   </div>
     <div id="tabChantiers" style="display:none"><div id="chantiersTabContent"></div></div>
-    <div id="tabDlm" style="display:none"><div id="dlmContent"></div></div>
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
       <button class="bnav-btn active" id="bnav-catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
@@ -490,7 +493,6 @@ const db = firebase.firestore();
       <button class="bnav-btn" id="bnav-inventaire" style="display:none" onclick="showTab('inventaire');setBnav('inventaire')"><span class="bnav-icon">📦</span>Stock</button>
       <button class="bnav-btn" id="bnav-reappro" style="display:none" onclick="showTab('reappro');setBnav('reappro')"><span class="bnav-icon">🔄</span>Réappro</button>
       <button class="bnav-btn" id="bnav-chantiers" style="display:none" onclick="showTab('chantiers');setBnav('chantiers')"><span class="bnav-icon">🏗️</span>Chantiers</button>
-      <button class="bnav-btn" id="bnav-dlm" style="display:none" onclick="showTab('dlm');setBnav('dlm')"><span class="bnav-icon">🛠️</span>DLM</button>
       <button class="bnav-btn" onclick="openCart()" style="position:relative"><span class="bnav-icon">&#128722;</span>Panier<span id="bnavCartCount" style="display:none;position:absolute;top:4px;right:calc(50% - 18px);background:var(--orange);color:#fff;border-radius:50%;width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;"></span></button>
     </div>
   </div>
@@ -544,6 +546,8 @@ const db = firebase.firestore();
     <div style="font-weight:700;margin:14px 0 4px;color:var(--text);">Articles rendus</div>
     <button id="retContinue" onclick="closeRetourModal();showTab('catalogue');setBnav('catalogue')" style="display:none;width:100%;padding:10px;margin-bottom:6px;background:var(--blue-light);color:var(--blue);border:2px solid var(--blue);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">➕ Continuer à choisir dans le catalogue</button>
     <div id="retItems"></div>
+    <div class="imp-bar"><label class="imp-btn imp-main">📥 Importer un panier Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importCartExcel(event,'retour')"></label><button type="button" class="imp-btn imp-sec" onclick="downloadCartTemplate()">📄 Modèle Excel</button></div><div id="retImportResult" class="imp-result"></div>
+    
     <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
       <input type="text" id="retAddSearch" placeholder="➕ Ajouter un article (code ou nom)" oninput="retourSearch()" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;">
       <div id="retAddResults"></div>
@@ -787,6 +791,7 @@ const db = firebase.firestore();
       
       <textarea id="cartComment" rows="2" placeholder="Commentaire (optionnel)"></textarea>
     </div>
+    <div class="imp-bar"><label class="imp-btn imp-main">📥 Importer un panier Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importCartExcel(event,'cart')"></label><button type="button" class="imp-btn imp-sec" onclick="downloadCartTemplate()">📄 Modèle Excel</button></div><div id="cartImportResult" class="imp-result"></div>
     <div class="cart-items" id="cartItems"></div>
     <button class="btn-send-order" onclick="sendOrder()">&#9989; Envoyer la commande</button>
   </div>
@@ -4893,7 +4898,6 @@ function startSession(u){
   perms.corbeille ? show('bnav-corbeille') : hide('bnav-corbeille');
   perms.users     ? show('bnav-users')     : hide('bnav-users');
   perms.chantiers ? show('bnav-chantiers') : hide('bnav-chantiers');
-  perms.dlm       ? show('bnav-dlm')       : hide('bnav-dlm');
 
   // Top nav tabs
   perms.suivi     ? show('nav-tab-suivi')      : hide('nav-tab-suivi');
@@ -4903,7 +4907,6 @@ function startSession(u){
   perms.corbeille ? show('nav-tab-corbeille')  : hide('nav-tab-corbeille');
   perms.users     ? show('nav-tab-users')      : hide('nav-tab-users');
   perms.chantiers ? show('nav-tab-chantiers')  : hide('nav-tab-chantiers');
-  perms.dlm       ? show('nav-tab-dlm')        : hide('nav-tab-dlm');
 
   // Date filter bar (stats)
   document.getElementById('dateFilterBar').style.display=perms.stats?'flex':'none';
@@ -4946,16 +4949,14 @@ function listenUsers(){
 }
 // Permissions par défaut selon le rôle
 const ROLE_DEFAULTS={
-  admin:      {catalogue:true,orders:true,suivi:true,stats:true,reappro:true,inventaire:true,corbeille:true,users:true,chantiers:true,dlm:true},
-  chef:       {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  conducteur: {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:true},
-  comptable:  {catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  atelier:    {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:true},
+  admin:      {catalogue:true,orders:true,suivi:true,stats:true,reappro:true,inventaire:true,corbeille:true,users:true,chantiers:true},
+  chef:       {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false},
+  conducteur: {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false},
+  comptable:  {catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false,chantiers:false},
+  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false},
+  atelier:    {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false},
 };
-const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users','chantiers','dlm'];
-// Seuls ces rôles peuvent voir la page DLM, quelle que soit la case cochée
-const DLM_ROLES=['atelier','conducteur','admin'];
+const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users','chantiers'];
 
 // ===== SERVICES : 'gros' (gros chantier) et 'particulier' (service 001) =====
 const SVC_LABEL={gros:'Gros chantier',particulier:'001 Particulier'};
@@ -4989,7 +4990,6 @@ function getPermissions(userData){
   // les clés absentes du profil enregistré (ex. dlm, chantiers) prennent la valeur par défaut du rôle
   const perms=Object.assign({},base,userData.permissions||{});
   if(role==='admin') ALL_PERMS.forEach(function(p){perms[p]=true;});
-  perms.dlm=!!perms.dlm&&DLM_ROLES.indexOf(role)!==-1;
   // la gestion des chantiers du service particulier : admin et conducteur de ce service uniquement
   if(role!=='admin'&&!gerePart) perms.chantiers=false;
   return perms;
@@ -5001,6 +5001,7 @@ function updatePermissionsFromRole(){
   const hasSvc=(role==='chef'||role==='conducteur'||role==='atelier'||role==='particulier');
   if(svcBlock){
     svcBlock.style.display=hasSvc?'':'none';
+    const lb=document.getElementById('newUserServiceLabel'); if(lb) lb.style.display=hasSvc?'':'none';
     if(role==='particulier'&&svcBlock.value==='gros') svcBlock.value='particulier';
   }
   const svc=hasSvc&&svcBlock?svcBlock.value:'gros';
@@ -5025,14 +5026,22 @@ function renderUsers(){
   document.getElementById('editUserOrigName').value='';
   updatePermissionsFromRole();
   updateConducteurSelect();
-  const ICONS={catalogue:'📦',orders:'📋',suivi:'📍',stats:'📊',reappro:'🔄',inventaire:'🏭',corbeille:'🗑️',users:'👤',chantiers:'🏗️',dlm:'🛠️'};
-  document.getElementById('usersList').innerHTML=Object.entries(all).map(([name,data])=>{
+  const ICONS={catalogue:'📦',orders:'📋',suivi:'📍',stats:'📊',reappro:'🔄',inventaire:'🏭',corbeille:'🗑️',users:'👤',chantiers:'🏗️'};
+  const ROLE_ORDER=['admin','comptable','conducteur','chef','atelier','particulier'];
+  const ROLE_TITLE={admin:'🔑 Admin',comptable:'📊 Comptable',conducteur:'🦺 Conducteurs de travaux',chef:'👷 Chefs de chantier',atelier:'🛠️ Atelier',particulier:'🏠 Particuliers'};
+  const rk=function(r){const i=ROLE_ORDER.indexOf(r);return i<0?99:i;};
+  const entries=Object.entries(all).sort(function(a,b){return (rk(a[1].role)-rk(b[1].role))||a[0].localeCompare(b[0],'fr',{sensitivity:'base'});});
+  const nbRole={}; entries.forEach(function(e){nbRole[e[1].role]=(nbRole[e[1].role]||0)+1;});
+  let lastRole=null;
+  document.getElementById('usersList').innerHTML=entries.map(([name,data])=>{
     const isAdmin=name==='Magasin';
     const perms=getPermissions(data);
     const permIcons=ALL_PERMS.filter(p=>perms[p]).map(p=>ICONS[p]).join(' ');
     const svcTag=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier'||data.role==='particulier')?' · '+(userSvcValue(data)==='both'?'🔵🔴 Les 2 services':(userSvcValue(data)==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')):'';
     const roleLabel=(data.role==='admin'?'🔑 Admin':data.role==='conducteur'?'🦺 Conducteur':data.role==='comptable'?'📊 Comptable':data.role==='particulier'?'🏠 Particulier':data.role==='atelier'?'🛠️ Atelier':'👷 Chef')+svcTag;
-    return `<div class="user-mgmt-card">
+    const head=(data.role!==lastRole)?`<div style="margin:14px 0 6px;font-size:0.85rem;font-weight:800;color:var(--blue);border-bottom:2px solid var(--blue-light);padding-bottom:4px">${ROLE_TITLE[data.role]||data.role} <span style="color:var(--muted);font-weight:600">(${nbRole[data.role]})</span></div>`:'';
+    lastRole=data.role;
+    return head+`<div class="user-mgmt-card">
       <div class="user-mgmt-info">
         <div class="user-mgmt-name">${name}</div>
         <div class="user-mgmt-role">${roleLabel}</div>
@@ -5081,6 +5090,7 @@ function editUser(name){
   document.getElementById('editUserOrigName').value=name;
   const hasSvc=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier'||data.role==='particulier');
   if(sv) sv.style.display=hasSvc?'':'none';
+  const lb2=document.getElementById('newUserServiceLabel'); if(lb2) lb2.style.display=hasSvc?'':'none';
   const perms=getPermissions(data);
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);if(el){el.checked=!!perms[p];el.disabled=data.role==='admin';}});
   document.getElementById('userForm').scrollIntoView({behavior:'smooth'});
@@ -5238,7 +5248,7 @@ function pickerSearch(ctx){
   const words=normTxt(inp.value).split(/\s+/).filter(Boolean), all=pickerList();
   if(!all.length){lst.innerHTML='<div class="picker-empty">Aucun chantier disponible pour ton service. Demande à l\'admin ou au conducteur d\'en ajouter.</div>';lst.style.display='block';return;}
   const res=all.filter(function(c){const t=normTxt(c.name);return words.every(function(w){return t.indexOf(w)!==-1;});});
-  const shown=res.slice(0,400), multi=isMultiSvc();
+  const shown=res, multi=isMultiSvc();   // aucune limite : tous les chantiers s'affichent
   lst.innerHTML=(shown.length?shown.map(function(c){
     const tag=multi?'<span style="color:var(--muted);font-size:0.72rem"> · '+(c.service==='particulier'?'001':'gros chantier')+'</span>':'';
     return '<div class="picker-item" data-name="'+editEsc(c.name)+'" onclick="pickerChoose(\''+ctx+'\',this.dataset.name)">'+editEsc(c.name)+tag+'</div>';
@@ -5354,13 +5364,6 @@ window.addEventListener('DOMContentLoaded', function(){
     if(saved && USERS[saved]) startSession(saved);
   });
 });
-// ===== PAGE DLM (réservée atelier / conducteur / admin) =====
-function renderDlm(){
-  const el=document.getElementById('dlmContent'); if(!el) return;
-  el.innerHTML='<div class="user-form" style="text-align:center;padding:30px 16px;">'
-    +'<h3 style="margin-bottom:8px">🛠️ DLM</h3>'
-    +'<p style="color:var(--muted);font-size:0.9rem">Cette page est réservée à l\'atelier, aux conducteurs de travaux et à l\'admin.<br>Son contenu sera ajouté prochainement.</p></div>';
-}
 // ===== ONGLET CHANTIERS DU SERVICE 001 PARTICULIER (admin + conducteur de ce service) =====
 let chantiersTabQuery='';
 function canManagePartChantiers(){ return currentRole==='admin'||(currentRole==='conducteur'&&mySvcs().indexOf('particulier')!==-1); }
@@ -5605,6 +5608,80 @@ function loadEmplacementsFromFirebase(){
     if(doc.exists){ const d=doc.data(); Object.keys(d).forEach(function(k){ if(k!=='_updatedAt') EMPLACEMENTS[k]=d[k]; }); }
   }).catch(function(){});
 }
+// ===== IMPORT D'UN PANIER DEPUIS EXCEL : colonnes CODE DELAMOTTE + QUANTITE =====
+function downloadCartTemplate(){
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([['CODE DELAMOTTE','QUANTITE','DESIGNATION (facultatif, pour votre repère)']]);
+  ws['!cols']=[{wch:18},{wch:12},{wch:48}];
+  XLSX.utils.book_append_sheet(wb,ws,'Panier');
+  const ws2=XLSX.utils.aoa_to_sheet([['MODE D\'EMPLOI'],['1. Onglet « Panier » : une ligne par article.'],['2. Colonne A : le CODE DELAMOTTE (6 chiffres).'],['3. Colonne B : la QUANTITE (pour une barre : le nombre de barres).'],['4. La colonne C est facultative, elle n\'est pas lue.'],['5. Enregistrez, puis dans l\'application : Panier > Importer un panier Excel.']]);
+  ws2['!cols']=[{wch:70}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Mode d emploi');
+  XLSX.writeFile(wb,'Modele_panier_DELAMOTTE.xlsx');
+  showToast('Modèle Excel téléchargé ✅');
+}
+// lecture des lignes : trouve l'en-tête « code » + « quantité » ; sinon colonne A = code, colonne B = quantité
+function cartImportParse(rows){
+  let hr=-1,cc=0,cq=1;
+  for(let i=0;i<Math.min(10,rows.length)&&hr===-1;i++){
+    const hk=rows[i].map(function(v){return normTxt(String(v)).replace(/\s+/g,' ').trim();});
+    const ic=hk.findIndex(function(v){return v.indexOf('code')!==-1;});
+    const iq=hk.findIndex(function(v){return v.indexOf('quantite')!==-1||v.indexOf('qte')===0||v==='qty';});
+    if(ic!==-1&&iq!==-1){hr=i;cc=ic;cq=iq;}
+  }
+  const lines=[], bad=[];
+  for(let r=hr+1;r<rows.length;r++){
+    const row=rows[r];
+    const code=String(row[cc]===undefined?'':row[cc]).trim().replace(/\.0+$/,'');
+    const qRaw=row[cq];
+    if(!code&&(qRaw===''||qRaw===undefined)) continue;
+    const qn=parseFloat(String(qRaw===undefined?'':qRaw).replace(',','.'));
+    if(!code||isNaN(qn)||qn<=0){bad.push(r+1);continue;}
+    lines.push({code:code,qty:Math.max(1,Math.round(qn))});
+  }
+  return {lines:lines,bad:bad};
+}
+function cartImportApply(rows,target){
+  const P=cartImportParse(rows), known={};
+  [...CATALOGUE,...customRefsCache].forEach(function(p){ if(p.cat!==DLM_CAT||canSeeDlm()) known[p.code]=p; });
+  const arr=(target==='retour'&&retourState)?retourState.items:cart;
+  let added=0; const unknown=[];
+  P.lines.forEach(function(l){
+    const p=known[l.code];
+    if(!p){ if(unknown.indexOf(l.code)===-1) unknown.push(l.code); return; }
+    const nom=getEffectiveName(l.code,p.nom), longueur=BARRE_LONGUEURS[l.code];
+    const idx=arr.findIndex(function(x){return x.code===l.code;});
+    if(longueur){
+      const qs=l.qty*longueur;
+      if(idx>=0){arr[idx].qty+=qs;arr[idx].barres=(arr[idx].barres||0)+l.qty;}
+      else arr.push({code:l.code,nom:nom,qty:qs,barres:l.qty,longueur:longueur});
+    }else{
+      if(idx>=0) arr[idx].qty+=l.qty; else arr.push({code:l.code,nom:nom,qty:l.qty});
+    }
+    added++;
+  });
+  updateCartCount();
+  if(target==='retour') renderRetourItems(); else { renderCartItems(); saveCart(); }
+  const box=document.getElementById(target==='retour'?'retImportResult':'cartImportResult');
+  let html=added?'✅ <b>'+added+' ligne(s) ajoutée(s)</b> depuis le fichier.':'⚠️ <b>Aucun article ajouté.</b>';
+  if(unknown.length) html+='<br>⚠️ Code(s) inconnu(s), ignoré(s) : '+unknown.slice(0,15).map(editEsc).join(', ')+(unknown.length>15?' … (+'+(unknown.length-15)+')':'');
+  if(P.bad.length) html+='<br>⚠️ Ligne(s) ignorée(s) (code ou quantité invalide) : '+P.bad.slice(0,15).join(', ')+(P.bad.length>15?' …':'');
+  if(box){ box.innerHTML=html; box.style.display='block'; box.style.background=(unknown.length||P.bad.length||!added)?'#fff3cd':'#eafaf1'; }
+  showToast(added?'📥 '+added+' ligne(s) importée(s)'+((unknown.length||P.bad.length)?' — voir le détail':''):'⚠️ Aucun article importé');
+}
+function importCartExcel(event,target){
+  const file=event.target.files[0]; if(!file) return;
+  event.target.value='';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
+      cartImportApply(rows,target);
+    }catch(err){ showToast('❌ Fichier illisible : utilisez le modèle Excel'); console.error(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -5615,7 +5692,6 @@ function showTab(tab){
   document.getElementById('tabInventaire').style.display=tab==='inventaire'?'block':'none';
   document.getElementById('tabReappro').style.display=tab==='reappro'?'block':'none';
   document.getElementById('tabChantiers').style.display=tab==='chantiers'?'block':'none';
-  document.getElementById('tabDlm').style.display=tab==='dlm'?'block':'none';
   document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',
     (i===0&&tab==='catalogue')||(i===1&&tab==='orders')||(i===2&&tab==='users')||(i===3&&tab==='suivi')||(i===4&&tab==='stats')||(i===5&&tab==='corbeille')));
   if(tab==='orders') renderOrders();
@@ -5626,15 +5702,19 @@ function showTab(tab){
   if(tab==='inventaire') renderInventaire();
   if(tab==='reappro') renderReappro();
   if(tab==='chantiers') renderChantiersTab();
-  if(tab==='dlm') renderDlm();
 }
 function setBnav(tab){
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
   const el=document.getElementById('bnav-'+tab);if(el)el.classList.add('active');
 }
 const CATS=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
+// ===== CATÉGORIE « DLM » du catalogue : réservée à l'atelier, aux conducteurs gros chantier et à l'admin =====
+const DLM_CAT='DLM';
+function canSeeDlm(){ return currentRole==='admin'||currentRole==='atelier'||(currentRole==='conducteur'&&mySvcs().indexOf('gros')!==-1); }
+function visibleCats(){ const base=CATS.filter(function(c){return c!==DLM_CAT;}); return canSeeDlm()?base.concat([DLM_CAT]):base; }
+CAT_ICON[DLM_CAT]='\u{1F6E0}\u{FE0F}';
 function buildCatalogue(){
-  document.getElementById('catScroll').innerHTML=CATS.map(c=>`<button class="cat-btn${c===currentCat?' active':''}" onclick="setCat('${c}')">${CAT_ICON[c]||'\uD83D\uDCE6'} ${c}</button>`).join('');
+  document.getElementById('catScroll').innerHTML=visibleCats().map(c=>`<button class="cat-btn${c===currentCat?' active':''}" onclick="setCat('${c}')">${CAT_ICON[c]||'\uD83D\uDCE6'} ${c}</button>`).join('');
   filterProducts();
 }
 function setCat(c){
@@ -5663,11 +5743,16 @@ function commonGenericName(allNoms){
 function filterProducts(){
   const q=normTxt(document.getElementById('searchInput').value);
   // noms effectifs (catalogue + désignations modifiées au crayon) : menus, libellés et recherche en dépendent
-  const allItems=[...CATALOGUE,...customRefsCache].map(p=>customNamesCache[p.code]?Object.assign({},p,{nom:customNamesCache[p.code]}):p);
+  const allItems=[...CATALOGUE,...customRefsCache].filter(p=>p.cat!==DLM_CAT||canSeeDlm()).map(p=>customNamesCache[p.code]?Object.assign({},p,{nom:customNamesCache[p.code]}):p);
   const idxOf=new Map(allItems.map((p,i)=>[p,i])); // position dans le catalogue
   const items=allItems.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
   const g=document.getElementById('productsGrid');
   const countEl=document.getElementById('searchCount');
+  if(currentCat===DLM_CAT&&!items.length&&!q){
+    g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 16px;font-size:0.9rem;">🛠️ Catégorie DLM : les articles seront ajoutés prochainement.</div>';
+    if(countEl) countEl.textContent='';
+    return;
+  }
 
   // Build variant groups from IMG_MAP
   const imgGroups={};
@@ -6272,6 +6357,7 @@ function retourSearch(){
   const all=[...CATALOGUE,...customRefsCache],res=[],seen={};
   for(let k=0;k<all.length&&res.length<8;k++){
     const p=all[k]; if(seen[p.code]) continue;
+    if(p.cat===DLM_CAT&&!canSeeDlm()) continue;
     const nom=getEffectiveName(p.code,p.nom), hay=normTxt(p.code+' '+nom);
     if(words.every(function(w){return hay.indexOf(w)!==-1;})){seen[p.code]=1;res.push({code:p.code,nom:nom});}
   }
@@ -6721,10 +6807,8 @@ function renderSuivi(){
     if(o.status==='pending') grouped[o.chantier].pending++;
     else grouped[o.chantier].done++;
   });
-  // chantiers avec commandes en attente d'abord, puis le plus récent en premier
-  const sorted=Object.entries(grouped).sort(function(a,b){
-    return (b[1].pending-a[1].pending)||String(b[1].orders[0].createdAt||'').localeCompare(String(a[1].orders[0].createdAt||''));
-  });
+  // chantiers classés par code (ordre croissant) pour tout le monde ; au sein d'un chantier : la plus récente en premier
+  const sorted=Object.entries(grouped).sort(function(a,b){return a[0].localeCompare(b[0],'fr',{numeric:true,sensitivity:'base'});});
   const both=(currentRole==='admin'||currentRole==='comptable'||mySvcs().length>1);
   el.innerHTML=`<h3 style="color:var(--blue);margin-bottom:16px;font-size:1rem">${title}</h3>`+
   sorted.map(([chantier,data])=>{
