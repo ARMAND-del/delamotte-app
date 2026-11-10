@@ -119,6 +119,27 @@ const db = firebase.firestore();
   .product-code{font-size:0.72rem;color:var(--muted);margin-bottom:3px;}
   .product-name{font-size:0.82rem;font-weight:600;line-height:1.3;margin-bottom:10px;min-height:32px;overflow-wrap:anywhere;}
   .product-card select{min-width:0;max-width:100%;}
+  @media(max-width:600px){
+    .header{padding:10px;gap:8px;}
+    .header>div:first-child{min-width:0;overflow:hidden;}
+    .header-right{gap:5px;flex-shrink:0;}
+    .user-badge{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 9px;}
+    .cart-btn{padding:8px 10px;}
+    .btn-logout{padding:6px 9px;}
+    .stat-card{min-width:80px;padding:12px 10px;}
+    .dashboard-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+    .dashboard .stat-card{min-width:0;padding:10px 4px;}
+    .stat-label{overflow-wrap:anywhere;}
+  }
+  .chantier-picker{position:relative;width:100%;}
+  .chantier-picker input{width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;}
+  .picker-list{max-height:230px;overflow-y:auto;background:var(--white);border:2px solid var(--border);border-radius:8px;margin-top:4px;}
+  .picker-item{padding:11px 12px;font-size:0.88rem;cursor:pointer;border-bottom:1px solid var(--border);overflow-wrap:anywhere;}
+  .picker-item:hover{background:var(--blue-light);}
+  .picker-empty{padding:11px 12px;font-size:0.82rem;color:var(--muted);}
+  .picker-chosen{align-items:center;gap:8px;padding:9px 12px;border:2px solid var(--green);border-radius:8px;background:#eafaf1;color:var(--text);font-size:0.88rem;}
+  .picker-chosen button{background:var(--white);border:1.5px solid var(--border);border-radius:6px;padding:4px 10px;font-size:0.78rem;font-weight:700;cursor:pointer;color:var(--text);flex-shrink:0;}
+  .cart-meta #cartChef,.cart-meta #livraisonBlock,.cart-meta .chantier-picker,.cart-meta #cartServiceBadge{grid-column:1/-1;}
   .qty-control{display:flex;align-items:center;justify-content:center;gap:6px;}
   .qty-btn{width:28px;height:28px;border-radius:6px;border:none;background:var(--blue);color:var(--white);font-size:1rem;font-weight:700;cursor:pointer;}
   .qty-input{width:40px;text-align:center;border:1px solid var(--border);border-radius:6px;padding:4px;font-size:0.9rem;}
@@ -162,7 +183,8 @@ const db = firebase.firestore();
   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--white);padding:12px 24px;border-radius:8px;font-size:0.9rem;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none;}
   .toast.show{opacity:1;}
   .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--border);z-index:150;}
-  .bottom-nav-inner{display:flex;}
+  .bottom-nav-inner{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .bnav-btn{min-width:58px;}
   .bnav-btn{flex:1;padding:10px 0;border:none;background:none;font-size:0.7rem;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
   .bnav-btn.active{color:var(--blue);}
   .user-mgmt-card{background:var(--white);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -346,6 +368,8 @@ const db = firebase.firestore();
     <button class="nav-tab" id="nav-tab-corbeille" style="display:none" onclick="showTab('corbeille')">🗑️ Corbeille</button>
     <button class="nav-tab" id="nav-tab-inventaire" style="display:none" onclick="showTab('inventaire')">📦 Inventaire</button>
     <button class="nav-tab" id="nav-tab-reappro" style="display:none" onclick="showTab('reappro')">🔄 Réappro</button>
+    <button class="nav-tab" id="nav-tab-chantiers" style="display:none" onclick="showTab('chantiers')">🏗️ Chantiers</button>
+    <button class="nav-tab" id="nav-tab-dlm" style="display:none" onclick="showTab('dlm')">🛠️ DLM</button>
   </div>
   <div class="main">
     <div id="tabCatalogue">
@@ -391,9 +415,11 @@ const db = firebase.firestore();
             <option value="conducteur">Conducteur de travaux</option>
             <option value="comptable">Comptable</option>
             <option value="particulier">Particulier</option>
+            <option value="atelier">Atelier</option>
             <option value="admin">Admin (accès total)</option>
           </select>
-          <input type="hidden" id="editUserOrigName">
+          <select id="newUserService" onchange="updatePermissionsFromRole()" style="display:none"><option value="gros">🔵 Gros chantier</option><option value="particulier">🔴 001 Particulier</option></select>
+        <input type="hidden" id="editUserOrigName">
         </div>
         <div style="background:var(--blue-light);border-radius:10px;padding:12px;margin:10px 0;">
           <div style="font-size:0.85rem;font-weight:700;color:var(--blue);margin-bottom:10px;">🔒 Accès personnalisés</div>
@@ -406,11 +432,10 @@ const db = firebase.firestore();
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_inventaire"> 📦 Inventaire</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_corbeille"> 🗑️ Corbeille</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_users"> 👤 Utilisateurs</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_chantiers"> 🏗️ Chantiers 001</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_dlm"> 🛠️ DLM</label>
           </div>
-          <div id="chantierFixeBlock" style="display:none;margin-top:8px;">
-            <label style="font-size:0.82rem;font-weight:700;color:var(--blue)">🏠 Chantier fixe (Particulier)</label>
-            <input type="text" id="chantierFixeInput" placeholder="Ex: 001 Particulier" style="width:100%;padding:8px 10px;border:2px solid var(--border);border-radius:8px;font-size:0.85rem;background:var(--white);color:var(--text);margin-top:4px;box-sizing:border-box;">
-          </div>
+          
         </div>
         <button class="btn-save-user" onclick="saveUser()">💾 Enregistrer</button>
       </div>
@@ -418,7 +443,7 @@ const db = firebase.firestore();
 
       <!-- GESTION CHANTIERS -->
       <div class="user-form" style="margin-top:20px">
-        <h3>🏗️ Gestion des chantiers</h3>
+        <h3>🏗️ Gros chantiers</h3>
         <div class="user-form-grid" style="margin-bottom:10px">
           <input type="text" id="newChantierName" placeholder="Nom du chantier *">
           <select id="newChantierConducteur">
@@ -447,6 +472,8 @@ const db = firebase.firestore();
   <div id="tabReappro" style="display:none">
     <div id="reapproContent"></div>
   </div>
+    <div id="tabChantiers" style="display:none"><div id="chantiersTabContent"></div></div>
+    <div id="tabDlm" style="display:none"><div id="dlmContent"></div></div>
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
       <button class="bnav-btn active" id="bnav-catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
@@ -457,6 +484,8 @@ const db = firebase.firestore();
       <button class="bnav-btn" id="bnav-corbeille" style="display:none" onclick="showTab('corbeille');setBnav('corbeille')"><span class="bnav-icon">🗑️</span>Corbeille</button>
       <button class="bnav-btn" id="bnav-inventaire" style="display:none" onclick="showTab('inventaire');setBnav('inventaire')"><span class="bnav-icon">📦</span>Stock</button>
       <button class="bnav-btn" id="bnav-reappro" style="display:none" onclick="showTab('reappro');setBnav('reappro')"><span class="bnav-icon">🔄</span>Réappro</button>
+      <button class="bnav-btn" id="bnav-chantiers" style="display:none" onclick="showTab('chantiers');setBnav('chantiers')"><span class="bnav-icon">🏗️</span>Chantiers</button>
+      <button class="bnav-btn" id="bnav-dlm" style="display:none" onclick="showTab('dlm');setBnav('dlm')"><span class="bnav-icon">🛠️</span>DLM</button>
       <button class="bnav-btn" onclick="openCart()" style="position:relative"><span class="bnav-icon">&#128722;</span>Panier<span id="bnavCartCount" style="display:none;position:absolute;top:4px;right:calc(50% - 18px);background:var(--orange);color:#fff;border-radius:50%;width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;"></span></button>
     </div>
   </div>
@@ -498,7 +527,12 @@ const db = firebase.firestore();
       <button onclick="closeRetourModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
     <p style="font-size:0.8rem;color:var(--muted);">Matériel rendu au magasin. Le stock ne bouge qu'après réception par le magasin.</p>
-    <div id="retChantierBlock"><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Chantier</label><select id="retChantierSel" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></select></div>
+    <div id="retChantierBlock"><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Chantier *</label>
+      <div class="chantier-picker">
+        <div id="retPickerSearchWrap"><input type="text" id="retPickerInput" placeholder="🔍 Rechercher et choisir un chantier" oninput="pickerSearch('ret')" onfocus="pickerSearch('ret')" autocomplete="off"><div id="retPickerList" class="picker-list" style="display:none"></div></div>
+        <div id="retPickerChosen" class="picker-chosen" style="display:none"></div>
+      </div>
+      <select id="retChantierSel" style="display:none"></select></div>
     <div><label id="retChefLabel" style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Rendu par</label><input type="text" id="retChef" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></div>
     <div><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Motif</label><select id="retMotif" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></select></div>
     <div><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Commentaire (optionnel)</label><textarea id="retComment" rows="2" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></textarea></div>
@@ -520,22 +554,37 @@ const db = firebase.firestore();
       <h3 style="color:#e67e22;font-size:1rem;">📋 Bons de retour</h3>
       <button onclick="closeRetoursList()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
-    <select id="retFilter" onchange="renderRetoursList()" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;margin-bottom:10px;"><option value="all">Tous</option><option value="pending">À réceptionner</option><option value="received">Reçus</option></select>
+    <select id="retFilter" onchange="renderRetoursList()" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;margin-bottom:10px;"><option value="all">Tous</option><option value="pending">À traiter</option><option value="received">Traités</option></select>
     <div id="retoursListBody"></div>
   </div>
 </div>
 <div id="retourReceiveModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;z-index:310;">
   <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);box-sizing:border-box;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <h3 style="color:#27ae60;font-size:1rem;">✅ Réceptionner le retour</h3>
+      <h3 style="color:#27ae60;font-size:1rem;">✅ Traiter le retour</h3>
       <button onclick="retourReceiveClose()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
     <div id="retRecvTitle" style="font-weight:700;font-size:0.85rem;margin-bottom:6px;"></div>
-    <p style="font-size:0.78rem;color:var(--muted);">Indique les quantités réellement reçues. Elles sont remises en stock, et le réappro du chantier baisse d'autant (dans la limite de ce qu'il avait pris). Mets 0 pour un article non remis en stock.</p>
+    <p style="font-size:0.78rem;color:var(--muted);">Indique les quantités réellement reçues. Elles sont remises dans le stock du service du bon (🔵 gros chantier ou 🔴 particulier), et le réappro du chantier baisse d'autant (dans la limite de ce qu'il avait pris). Mets 0 pour un article non remis en stock.</p>
     <div id="retRecvItems"></div>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button onclick="retourReceiveClose()" style="flex:1;padding:12px;background:var(--gray);border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;color:var(--text);">Annuler</button>
-      <button onclick="retourReceiveConfirm()" style="flex:2;padding:12px;background:#27ae60;color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Remettre en stock</button>
+      <button onclick="retourReceiveConfirm()" style="flex:2;padding:12px;background:#27ae60;color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Traitée : remettre en stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- SYNCHRO EXCEL -->
+<div id="excelSyncModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:320;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+  <div style="background:var(--white);border-radius:16px;padding:20px;width:100%;max-width:620px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 style="color:#e67e22;font-size:1rem;">🔄 Synchronisation depuis Excel</h3>
+      <button onclick="excelSyncClose()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <div id="excelSyncBody"></div>
+    <div style="display:flex;gap:10px;margin-top:16px;">
+      <button onclick="excelSyncClose()" style="flex:1;padding:12px;background:var(--gray);border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;color:var(--text);">Annuler</button>
+      <button id="excelSyncApplyBtn" onclick="excelSyncApply()" style="flex:2;padding:12px;background:#e67e22;color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Appliquer</button>
     </div>
   </div>
 </div>
@@ -704,11 +753,17 @@ const db = firebase.firestore();
   <div class="cart-content">
     <div class="cart-header"><h2>&#128722; Mon Panier</h2><button class="btn-close-cart" onclick="closeCart()">&#10005;</button></div>
     <div class="cart-meta" id="cartMeta">
+      <div id="cartServiceBadge" style="padding:8px 12px;border-radius:8px;font-size:0.82rem;font-weight:700;background:var(--blue-light);color:var(--blue);">Service : choisis un chantier</div>
       <!-- Champs normaux (cachés pour particulier) -->
-      <select id="cartChantier" style="padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;width:100%;background:var(--white);color:var(--text);">
-        <option value="">-- Sélectionner un chantier *--</option>
-      </select>
-      <input type="text" id="cartChef" placeholder="Chef de chantier *">
+      <div class="chantier-picker">
+        <div id="cartPickerSearchWrap">
+          <input type="text" id="cartPickerInput" placeholder="🔍 Rechercher et choisir un chantier *" oninput="pickerSearch('cart')" onfocus="pickerSearch('cart')" autocomplete="off">
+          <div id="cartPickerList" class="picker-list" style="display:none"></div>
+        </div>
+        <div id="cartPickerChosen" class="picker-chosen" style="display:none"></div>
+      </div>
+      <select id="cartChantier" style="display:none"><option value="">--</option></select>
+      <input type="text" id="cartChef" placeholder="Demandeur *">
       <!-- Lieu de livraison -->
       <div id="livraisonBlock" style="display:flex;gap:8px;margin-top:4px;">
         <label style="flex:1;cursor:pointer;">
@@ -723,18 +778,7 @@ const db = firebase.firestore();
         </label>
       </div>
       <input type="hidden" id="cartLivraison" value="entreprise">
-      <!-- Champs particulier uniquement -->
-      <div id="particulierBlock" style="display:none;">
-        <div style="padding:8px 12px;background:var(--blue-light);border-radius:8px;margin-bottom:6px;font-size:0.85rem;">
-          <div style="color:var(--muted);font-size:0.75rem;font-weight:600">SERVICE</div>
-          <div style="font-weight:700;color:var(--blue)" id="particulierService"></div>
-        </div>
-        <div style="padding:8px 12px;background:var(--gray);border-radius:8px;margin-bottom:6px;font-size:0.85rem;">
-          <div style="color:var(--muted);font-size:0.75rem;font-weight:600">DEMANDEUR</div>
-          <div style="font-weight:700;color:var(--text)" id="particulierUser"></div>
-        </div>
-        <input type="text" id="cartNomParticulier" placeholder="Nom du chantier *" style="width:100%;padding:10px 12px;border:2px solid var(--orange);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;">
-      </div>
+      
       <textarea id="cartComment" rows="2" placeholder="Commentaire (optionnel)"></textarea>
     </div>
     <div class="cart-items" id="cartItems"></div>
@@ -4818,9 +4862,9 @@ function startSession(u){
   localStorage.setItem('delamotte_session', u);
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('app').style.display='flex';
-  const roleIcon=currentRole==='admin'?' 🔑':currentRole==='conducteur'?' 🦺':currentRole==='comptable'?' 📊':currentRole==='particulier'?' 🏠':'';
+  const roleIcon=currentRole==='admin'?' 🔑':currentRole==='conducteur'?' 🦺':currentRole==='comptable'?' 📊':currentRole==='particulier'?' 🏠':currentRole==='atelier'?' 🛠️':'';
   document.getElementById('userBadge').textContent=u+roleIcon;
-  if(currentRole==='chef'||currentRole==='conducteur'||currentRole==='comptable') {
+  if(currentRole!=='admin') {
     document.getElementById('cartChef').value=u;
     document.getElementById('cartChef').readOnly=true;
     document.getElementById('cartChef').style.background='var(--gray)';
@@ -4841,6 +4885,8 @@ function startSession(u){
   perms.inventaire? show('bnav-inventaire'): hide('bnav-inventaire');
   perms.corbeille ? show('bnav-corbeille') : hide('bnav-corbeille');
   perms.users     ? show('bnav-users')     : hide('bnav-users');
+  perms.chantiers ? show('bnav-chantiers') : hide('bnav-chantiers');
+  perms.dlm       ? show('bnav-dlm')       : hide('bnav-dlm');
 
   // Top nav tabs
   perms.suivi     ? show('nav-tab-suivi')      : hide('nav-tab-suivi');
@@ -4849,6 +4895,8 @@ function startSession(u){
   perms.inventaire? show('nav-tab-inventaire') : hide('nav-tab-inventaire');
   perms.corbeille ? show('nav-tab-corbeille')  : hide('nav-tab-corbeille');
   perms.users     ? show('nav-tab-users')      : hide('nav-tab-users');
+  perms.chantiers ? show('nav-tab-chantiers')  : hide('nav-tab-chantiers');
+  perms.dlm       ? show('nav-tab-dlm')        : hide('nav-tab-dlm');
 
   // Date filter bar (stats)
   document.getElementById('dateFilterBar').style.display=perms.stats?'flex':'none';
@@ -4867,6 +4915,7 @@ function startSession(u){
   if(perms.reappro) listenReapproCommande();
   listenReapproStock();
   loadRefsFournFromFirebase();
+  loadEmplacementsFromFirebase();
   listenCustomRefs();
   listenCustomNames();
   listenRetours();
@@ -4890,37 +4939,60 @@ function listenUsers(){
 }
 // Permissions par défaut selon le rôle
 const ROLE_DEFAULTS={
-  admin:    {catalogue:true,orders:true,suivi:true,stats:true,reappro:true,inventaire:true,corbeille:true,users:true},
-  chef:     {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false},
-  conducteur:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false},
-  comptable:{catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false},
-  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false},
+  admin:      {catalogue:true,orders:true,suivi:true,stats:true,reappro:true,inventaire:true,corbeille:true,users:true,chantiers:true,dlm:true},
+  chef:       {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
+  conducteur: {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:true},
+  comptable:  {catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
+  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
+  atelier:    {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:true},
 };
-const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users'];
+const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users','chantiers','dlm'];
+// Seuls ces rôles peuvent voir la page DLM, quelle que soit la case cochée
+const DLM_ROLES=['atelier','conducteur','admin'];
+
+// ===== SERVICES : 'gros' (gros chantier) et 'particulier' (service 001) =====
+const SVC_LABEL={gros:'Gros chantier',particulier:'001 Particulier'};
+function userSvc(u){ if(!u) return 'gros'; if(u.role==='particulier') return 'particulier'; return u.service==='particulier'?'particulier':'gros'; }
+function mySvc(){ return userSvc(getAllUsers()[currentUser]); }
+function chantierSvc(c){ return c&&c.service==='particulier'?'particulier':'gros'; }
+function chantierSvcByName(name){ return chantierSvc(getChantiersFull().find(function(x){return x.name===name;})); }
+// service d'une commande : champ enregistré, sinon déduit (anciennes commandes)
+function orderSvc(o){
+  if(o.service) return o.service;
+  const u=getAllUsers()[o.user];
+  return (o.chantier==='001 Particulier'||(u&&u.role==='particulier'))?'particulier':'gros';
+}
+function retourSvc(r){ return r.service?r.service:(r.nomChantier?'particulier':'gros'); }
 
 function getPermissions(userData){
-  if(userData.permissions) return userData.permissions;
-  return ROLE_DEFAULTS[userData.role]||ROLE_DEFAULTS.chef;
+  const role=userData.role;
+  const base=Object.assign({},ROLE_DEFAULTS[role]||ROLE_DEFAULTS.chef);
+  if(role==='conducteur'&&userSvc(userData)==='particulier') base.chantiers=true;   // le conducteur du service particulier gère ses chantiers
+  // les clés absentes du profil enregistré (ex. dlm, chantiers) prennent la valeur par défaut du rôle
+  const perms=Object.assign({},base,userData.permissions||{});
+  if(role==='admin') ALL_PERMS.forEach(function(p){perms[p]=true;});
+  perms.dlm=!!perms.dlm&&DLM_ROLES.indexOf(role)!==-1;
+  // la gestion des chantiers du service particulier : admin et conducteur de ce service uniquement
+  if(role!=='admin'&&!(role==='conducteur'&&userSvc(userData)==='particulier')) perms.chantiers=false;
+  return perms;
 }
 
 function updatePermissionsFromRole(){
   const role=document.getElementById('newUserRole').value;
-  const defaults=ROLE_DEFAULTS[role]||ROLE_DEFAULTS.chef;
+  const svcBlock=document.getElementById('newUserService');
+  const hasSvc=(role==='chef'||role==='conducteur'||role==='atelier');
+  if(svcBlock) svcBlock.style.display=hasSvc?'':'none';
+  const svc=(role==='particulier')?'particulier':(hasSvc&&svcBlock?svcBlock.value:'gros');
+  const defaults=getPermissions({role:role,service:svc});
   ALL_PERMS.forEach(p=>{
     const el=document.getElementById('perm_'+p);
     if(el) el.checked=!!defaults[p];
   });
   const isAdmin=role==='admin';
-  const isParticulier=role==='particulier';
   ALL_PERMS.forEach(p=>{
     const el=document.getElementById('perm_'+p);
     if(el) el.disabled=isAdmin;
   });
-  const block=document.getElementById('chantierFixeBlock');
-  if(block) block.style.display=isParticulier?'block':'none';
-  const fixeInput=document.getElementById('chantierFixeInput');
-  if(fixeInput&&isParticulier&&!fixeInput.value) fixeInput.value='001 Particulier';
-  if(fixeInput&&!isParticulier) fixeInput.value='';
 }
 
 function renderUsers(){
@@ -4932,12 +5004,13 @@ function renderUsers(){
   document.getElementById('editUserOrigName').value='';
   updatePermissionsFromRole();
   updateConducteurSelect();
-  const ICONS={catalogue:'📦',orders:'📋',suivi:'📍',stats:'📊',reappro:'🔄',inventaire:'🏭',corbeille:'🗑️',users:'👤'};
+  const ICONS={catalogue:'📦',orders:'📋',suivi:'📍',stats:'📊',reappro:'🔄',inventaire:'🏭',corbeille:'🗑️',users:'👤',chantiers:'🏗️',dlm:'🛠️'};
   document.getElementById('usersList').innerHTML=Object.entries(all).map(([name,data])=>{
     const isAdmin=name==='Magasin';
     const perms=getPermissions(data);
     const permIcons=ALL_PERMS.filter(p=>perms[p]).map(p=>ICONS[p]).join(' ');
-    const roleLabel=data.role==='admin'?'🔑 Admin':data.role==='conducteur'?'🦺 Conducteur':data.role==='comptable'?'📊 Comptable':data.role==='particulier'?'🏠 Particulier'+(data.chantierFixe?' — '+data.chantierFixe:''):'👷 Chef';
+    const svcTag=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier'||data.role==='particulier')?' · '+(userSvc(data)==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier'):'';
+    const roleLabel=(data.role==='admin'?'🔑 Admin':data.role==='conducteur'?'🦺 Conducteur':data.role==='comptable'?'📊 Comptable':data.role==='particulier'?'🏠 Particulier':data.role==='atelier'?'🛠️ Atelier':'👷 Chef')+svcTag;
     return `<div class="user-mgmt-card">
       <div class="user-mgmt-info">
         <div class="user-mgmt-name">${name}</div>
@@ -4961,10 +5034,8 @@ function saveUser(){
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);permissions[p]=el?el.checked:false;});
   if(role==='admin') ALL_PERMS.forEach(p=>permissions[p]=true);
   const userData={pass,role,permissions};
-  if(role==='particulier'){
-    const chantierFixe=document.getElementById('chantierFixeInput')?.value.trim()||'';
-    if(chantierFixe) userData.chantierFixe=chantierFixe;
-  }
+  if(role==='particulier') userData.service='particulier';
+  else if(role==='chef'||role==='conducteur'||role==='atelier') userData.service=document.getElementById('newUserService').value==='particulier'?'particulier':'gros';
   const saves=[];
   if(origName && origName!==name){
     saves.push(db.collection('users').doc(origName).delete());
@@ -4983,13 +5054,12 @@ function editUser(name){
   document.getElementById('newUserName').value=name;
   document.getElementById('newUserPass').value=data.pass;
   document.getElementById('newUserRole').value=data.role;
+  const sv=document.getElementById('newUserService'); if(sv) sv.value=userSvc(data);
   document.getElementById('editUserOrigName').value=name;
+  const hasSvc=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier');
+  if(sv) sv.style.display=hasSvc?'':'none';
   const perms=getPermissions(data);
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);if(el){el.checked=!!perms[p];el.disabled=data.role==='admin';}});
-  const block=document.getElementById('chantierFixeBlock');
-  if(block) block.style.display=data.role==='particulier'?'block':'none';
-  const fixeInput=document.getElementById('chantierFixeInput');
-  if(fixeInput) fixeInput.value=data.chantierFixe||'';
   document.getElementById('userForm').scrollIntoView({behavior:'smooth'});
 }
 
@@ -5014,7 +5084,7 @@ function addChantier(){
   const name=document.getElementById('newChantierName').value.trim();
   const conducteur=document.getElementById('newChantierConducteur').value;
   if(!name){showToast('Entrez un nom de chantier');return;}
-  const data={name,conducteur:conducteur||'',createdAt:new Date().toISOString()};
+  const data={name,service:'gros',conducteur:conducteur||'',createdAt:new Date().toISOString()};
   db.collection('chantiers').doc(name).set(data)
     .then(()=>{
       document.getElementById('newChantierName').value='';
@@ -5036,6 +5106,8 @@ function listenChantiers(){
     localStorage.setItem('delamotte_chantiers_full',JSON.stringify(list));
     renderChantiers();
     updateChantierSelect();
+    pickerSetOptions('ret');
+    renderChantiersTabList();
     updateConducteurSelect();
   });
 }
@@ -5055,7 +5127,7 @@ function updateConducteurSelect(){
   });
 }
 function renderChantiers(){
-  const list=getChantiersFull();
+  const list=getChantiersFull().filter(function(c){return chantierSvc(c)==='gros';});
   const el=document.getElementById('chantiersList');
   if(!el)return;
   if(!list.length){el.innerHTML='<p style="color:var(--muted);font-size:0.85rem;padding:10px 0">Aucun chantier — ajoutez-en un ci-dessus</p>';return;}
@@ -5102,34 +5174,79 @@ function saveEditChantier(){
     })
     .catch(()=>showToast('Erreur'));
 }
-function updateChantierSelect(){
-  const sel=document.getElementById('cartChantier');
-  if(!sel)return;
-  sel.disabled=false;
-  const current=sel.value;
-  sel.innerHTML='<option value="">-- Sélectionner un chantier * --</option>';
-  let list=getChantiers();
-  // Chef de chantier : uniquement ses propres chantiers
-  if(currentRole==='chef'){
-    const full=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
-    const siens=full.filter(c=>c.chef===currentUser||c.name===currentUser).map(c=>c.name);
-    if(siens.length) list=siens;
-  }
-  // Particulier : uniquement son chantier assigné (fixe)
-  if(currentRole==='particulier'){
-    const userData=getAllUsers()[currentUser];
-    const chantierFixe=userData&&userData.chantierFixe?userData.chantierFixe:currentUser;
-    sel.innerHTML=`<option value="${chantierFixe}" selected>${chantierFixe}</option>`;
-    sel.disabled=true;
-    return;
-  }
-  // Conducteur : voit tous les chantiers
-  list.forEach(name=>{
-    const opt=document.createElement('option');
-    opt.value=name;opt.textContent=name;
-    if(name===current)opt.selected=true;
-    sel.appendChild(opt);
-  });
+// ===== CHANTIERS PAR SERVICE : liste autorisée + sélecteur avec recherche =====
+function pickerList(){
+  const svc=mySvc();
+  return getChantiersFull()
+    .filter(function(c){return currentRole==='admin'||chantierSvc(c)===svc;})
+    .map(function(c){return {name:c.name,service:chantierSvc(c)};})
+    .sort(function(a,b){return a.name.localeCompare(b.name,'fr',{numeric:true});});
+}
+function pickerIds(ctx){
+  return ctx==='cart'
+    ?{sel:'cartChantier',inp:'cartPickerInput',list:'cartPickerList',box:'cartPickerChosen',wrap:'cartPickerSearchWrap'}
+    :{sel:'retChantierSel',inp:'retPickerInput',list:'retPickerList',box:'retPickerChosen',wrap:'retPickerSearchWrap'};
+}
+function pickerSetOptions(ctx){
+  const I=pickerIds(ctx), sel=document.getElementById(I.sel); if(!sel) return;
+  const cur=sel.value, list=pickerList();
+  sel.innerHTML='<option value="">--</option>'+list.map(function(c){return '<option value="'+editEsc(c.name)+'">'+editEsc(c.name)+'</option>';}).join('');
+  sel.value=list.some(function(c){return c.name===cur;})?cur:'';
+  pickerSync(ctx);
+}
+function pickerSetValue(ctx,name){
+  const I=pickerIds(ctx), sel=document.getElementById(I.sel); if(!sel||!name) return;
+  if(!Array.prototype.some.call(sel.options,function(o){return o.value===name;})){const o=document.createElement('option');o.value=name;o.textContent=name;sel.appendChild(o);}
+  sel.value=name; pickerSync(ctx);
+}
+function pickerSync(ctx){
+  const I=pickerIds(ctx), sel=document.getElementById(I.sel); if(!sel) return;
+  const val=sel.value, box=document.getElementById(I.box), wrap=document.getElementById(I.wrap), lst=document.getElementById(I.list);
+  if(val){
+    const tag=currentRole==='admin'?(chantierSvcByName(val)==='particulier'?' · 001':' · gros chantier'):'';
+    box.innerHTML='<span style="flex:1;min-width:0;overflow-wrap:anywhere">✅ <b>'+editEsc(val)+'</b>'+tag+'</span><button type="button" onclick="pickerClear(\''+ctx+'\')">Changer</button>';
+    box.style.display='flex'; wrap.style.display='none'; lst.style.display='none';
+  }else{ box.style.display='none'; wrap.style.display=''; }
+  if(ctx==='cart') updateCartServiceUI();
+}
+function pickerSearch(ctx){
+  const I=pickerIds(ctx), lst=document.getElementById(I.list), inp=document.getElementById(I.inp);
+  const words=normTxt(inp.value).split(/\s+/).filter(Boolean), all=pickerList();
+  if(!all.length){lst.innerHTML='<div class="picker-empty">Aucun chantier disponible pour ton service. Demande à l\'admin ou au conducteur d\'en ajouter.</div>';lst.style.display='block';return;}
+  const res=all.filter(function(c){const t=normTxt(c.name);return words.every(function(w){return t.indexOf(w)!==-1;});});
+  const shown=res.slice(0,40);
+  lst.innerHTML=shown.length?shown.map(function(c){
+    const tag=currentRole==='admin'?'<span style="color:var(--muted);font-size:0.72rem"> · '+(c.service==='particulier'?'001':'gros chantier')+'</span>':'';
+    return '<div class="picker-item" data-name="'+editEsc(c.name)+'" onclick="pickerChoose(\''+ctx+'\',this.dataset.name)">'+editEsc(c.name)+tag+'</div>';
+  }).join('')+(res.length>shown.length?'<div class="picker-empty">+ '+(res.length-shown.length)+' autres : précise ta recherche</div>':''):'<div class="picker-empty">Aucun chantier trouvé</div>';
+  lst.style.display='block';
+}
+function pickerChoose(ctx,name){
+  if(!pickerList().some(function(c){return c.name===name;})) return;
+  const I=pickerIds(ctx); document.getElementById(I.inp).value='';
+  pickerSetValue(ctx,name);
+  if(ctx==='cart') saveCart();
+}
+function pickerClear(ctx){
+  const I=pickerIds(ctx); document.getElementById(I.sel).value='';
+  pickerSync(ctx);
+  const inp=document.getElementById(I.inp); if(inp){inp.value='';inp.focus();pickerSearch(ctx);}
+  if(ctx==='cart') saveCart();
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest||e.target.closest('.chantier-picker')) return;
+  document.querySelectorAll('.picker-list').forEach(function(l){l.style.display='none';});
+});
+function updateChantierSelect(){ pickerSetOptions('cart'); }
+// service affiché dans le panier : celui de l'utilisateur (admin : celui du chantier choisi)
+function updateCartServiceUI(){
+  const badge=document.getElementById('cartServiceBadge'); if(!badge) return;
+  const sel=document.getElementById('cartChantier'), name=sel?sel.value:'';
+  const svc=currentRole==='admin'?(name?chantierSvcByName(name):null):mySvc();
+  badge.textContent=svc?('Service : '+SVC_LABEL[svc]):'Service : choisis un chantier';
+  badge.style.background=svc==='particulier'?'#fdecea':'var(--blue-light)';
+  badge.style.color=svc==='particulier'?'#c0392b':'var(--blue)';
+  const lv=document.getElementById('livraisonBlock'); if(lv) lv.style.display=svc==='particulier'?'none':'';
 }
 function checkNewOrders(){
   const lastVisit=parseInt(localStorage.getItem('delamotte_lastvisit')||'0');
@@ -5195,6 +5312,280 @@ window.addEventListener('DOMContentLoaded', function(){
     if(saved && USERS[saved]) startSession(saved);
   });
 });
+// ===== PAGE DLM (réservée atelier / conducteur / admin) =====
+function renderDlm(){
+  const el=document.getElementById('dlmContent'); if(!el) return;
+  el.innerHTML='<div class="user-form" style="text-align:center;padding:30px 16px;">'
+    +'<h3 style="margin-bottom:8px">🛠️ DLM</h3>'
+    +'<p style="color:var(--muted);font-size:0.9rem">Cette page est réservée à l\'atelier, aux conducteurs de travaux et à l\'admin.<br>Son contenu sera ajouté prochainement.</p></div>';
+}
+// ===== ONGLET CHANTIERS DU SERVICE 001 PARTICULIER (admin + conducteur de ce service) =====
+let chantiersTabQuery='';
+function canManagePartChantiers(){ return currentRole==='admin'||(currentRole==='conducteur'&&mySvc()==='particulier'); }
+function renderChantiersTab(){
+  const el=document.getElementById('chantiersTabContent'); if(!el) return;
+  if(!canManagePartChantiers()){el.innerHTML='';return;}
+  const inp='width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;';
+  el.innerHTML='<div class="user-form"><h3>🏠 Chantiers du service 001 Particulier</h3>'
+    +'<p style="font-size:0.8rem;color:var(--muted);margin:4px 0 10px">Les équipes du service 001 ne peuvent commander que sur les chantiers de cette liste. Un chantier par ligne.</p>'
+    +'<textarea id="chPartNew" rows="3" placeholder="Nom du chantier (un par ligne)" style="'+inp+'"></textarea>'
+    +'<button class="btn-save-user" onclick="addChantiersPart()" style="margin-top:8px">➕ Ajouter</button></div>'
+    +'<div class="user-form" style="margin-top:14px"><input type="text" id="chPartSearch" placeholder="🔍 Rechercher un chantier..." value="'+editEsc(chantiersTabQuery)+'" oninput="chantiersTabQuery=this.value;renderChantiersTabList()" style="'+inp+'">'
+    +'<div id="chPartCount" style="font-size:0.78rem;color:var(--muted);margin:8px 0"></div><div id="chPartList"></div></div>';
+  renderChantiersTabList();
+}
+function renderChantiersTabList(){
+  const el=document.getElementById('chPartList'); if(!el) return;
+  const words=normTxt(chantiersTabQuery).split(/\s+/).filter(Boolean);
+  const all=getChantiersFull().filter(function(c){return chantierSvc(c)==='particulier';});
+  const list=all.filter(function(c){const t=normTxt(c.name);return words.every(function(w){return t.indexOf(w)!==-1;});})
+    .sort(function(a,b){return a.name.localeCompare(b.name,'fr',{numeric:true});});
+  const cnt=document.getElementById('chPartCount'); if(cnt) cnt.textContent=all.length+' chantier(s)'+(words.length?' · '+list.length+' trouvé(s)':'');
+  el.innerHTML=list.length?list.map(function(c){
+    return '<div class="user-mgmt-card"><div class="user-mgmt-info"><div class="user-mgmt-name">🏠 '+editEsc(c.name)+'</div></div>'
+      +'<div class="user-mgmt-actions"><button class="btn-del-user" data-name="'+editEsc(c.name)+'" onclick="deleteChantierPart(this.dataset.name)">🗑️</button></div></div>';
+  }).join(''):'<p style="color:var(--muted);font-size:0.85rem;padding:10px 0">'+(all.length?'Aucun chantier trouvé':'Aucun chantier pour le moment : ajoutez-en ci-dessus')+'</p>';
+}
+function addChantiersPart(){
+  if(!canManagePartChantiers()){showToast('Action non autorisée');return;}
+  const ta=document.getElementById('chPartNew');
+  const names=[...new Set(ta.value.split('\n').map(function(s){return s.replace(/\//g,'-').replace(/\s+/g,' ').trim();}).filter(Boolean))];
+  if(!names.length){showToast('Entrez au moins un nom de chantier');return;}
+  const existing=new Set(getChantiersFull().map(function(c){return c.name.toLowerCase();}));
+  const nouveaux=names.filter(function(n){return !existing.has(n.toLowerCase());});
+  if(!nouveaux.length){showToast('Ces chantiers existent déjà');return;}
+  const now=new Date().toISOString(), batch=db.batch();
+  nouveaux.forEach(function(n){batch.set(db.collection('chantiers').doc(n),{name:n,service:'particulier',conducteur:'',createdAt:now,createdBy:currentUser});});
+  batch.commit().then(function(){
+    ta.value='';
+    showToast('✅ '+nouveaux.length+' chantier(s) ajouté(s)'+(names.length>nouveaux.length?' · '+(names.length-nouveaux.length)+' déjà existant(s) ignoré(s)':''));
+  }).catch(function(e){showToast('❌ Non enregistré'+((e&&e.code)?' ('+e.code+')':''));});
+}
+function deleteChantierPart(name){
+  if(!canManagePartChantiers()||chantierSvcByName(name)!=='particulier'){showToast('Action non autorisée');return;}
+  if(!confirm('Supprimer le chantier "'+name+'" ?\nLes commandes déjà passées restent visibles.')) return;
+  db.collection('chantiers').doc(name).delete().then(function(){showToast('Chantier supprimé');}).catch(function(){showToast('Erreur lors de la suppression');});
+}
+// ===== SYNCHRONISATION DEPUIS EXCEL (onglets par catégorie, jamais la feuille 'reference') =====
+const EXCEL_SKIP=['catalogue','cse','secours','presentation','nom','contact','feuille commande','stock total','chantier','cmd avec prix','commande','reference','radiateur','fumisterie','sanitaire','atelier dlm incorpo'];
+const EXCEL_NO_NEW=['acier','mapress','pvc-c'];   // lus pour les articles existants, mais ne créent pas de nouveaux articles
+const EXCEL_SHEET_CAT={'quincaillerie':'Quincailleries','supportage visserie':'Supportage Visserie','accessoire sanitaire':'Accessoire Sanitaire','pvc':'Raccords PVC','pvc blanc':'PVC Blanc','fonte':'Fonte','laiton':'Laiton','per':'PER','multicouche':'Multicouche','cuivres':'Cuivres','cuivre a sertir':'Cuivre a Sertir','pvc-u':'PVC U','pehd':'PEHD','ventilation':'VENTILATION','electricite':'ELECTRICITE','epi':'EPI','divers':'Divers','incorporation':'INCORPORATION','calorifuge':'Calorifuge'};
+let excelSyncState=null;
+function excelKey(s){ return normTxt(s).replace(/\s+/g,' ').trim(); }
+
+// lecture des onglets : désignation, code, fournisseur, réf. fournisseur, emplacement, prix, stock MAG (rouge = particulier) et GC (bleu = gros chantier)
+function excelParseTabs(wb){
+  const byCode={}, sheets=[];
+  wb.SheetNames.forEach(function(sname){
+    const key=excelKey(sname);
+    if(EXCEL_SKIP.indexOf(key)!==-1) return;
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[sname],{header:1,defval:'',raw:true});
+    let hr=-1,H=null;
+    for(let i=0;i<Math.min(15,rows.length)&&hr===-1;i++){
+      const hk=rows[i].map(excelKey);
+      if(hk.some(function(v){return v.indexOf('code')!==-1&&v.indexOf('delamotte')!==-1;})){hr=i;H=hk;}
+    }
+    if(hr===-1) return;
+    const gc=function(v){return /(^|\s)gc(\s|$)/.test(v);};
+    const col={
+      code:H.findIndex(function(v){return v.indexOf('code')!==-1&&v.indexOf('delamotte')!==-1;}),
+      nom:H.findIndex(function(v){return v.indexOf('designation')!==-1;}),
+      fourn:H.findIndex(function(v){return v.indexOf('fournisseur')!==-1&&v.indexOf('ref')===-1&&v.indexOf('code')===-1;}),
+      cf:H.findIndex(function(v){return v.indexOf('fournisseur')!==-1&&(v.indexOf('ref')!==-1||v.indexOf('code')!==-1);}),
+      emp:H.findIndex(function(v){return v.indexOf('emplacement')!==-1;}),
+      prix:H.findIndex(function(v){return v.indexOf('prix')!==-1;}),
+      qMag:H.findIndex(function(v){return v.indexOf('quantite')===0&&v.indexOf('mag')!==-1;}),
+      qGc:H.findIndex(function(v){return v.indexOf('quantite')===0&&gc(v);}),
+      qLone:H.findIndex(function(v){return v.indexOf('quantite')===0&&v.indexOf('mag')===-1&&!gc(v)&&v.indexOf('cout')===-1;})
+    };
+    if(col.code===-1||col.nom===-1) return;
+    const colP=col.qMag!==-1?col.qMag:col.qLone;   // rouge : « QUANTITE MAG » (ou « QUANTITE » seule) = service particulier
+    const colG=col.qGc;                             // bleu : « QUANTITE GC » = service gros chantier
+    sheets.push(sname);
+    const num=function(v){const n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n;};
+    const txt=function(c,r){return c===-1?'':String(r[c]===undefined?'':r[c]).replace(/[\r\n\t\u2028\u2029]+/g,' ').trim().replace(/\.0+$/,'');};
+    for(let r=hr+1;r<rows.length;r++){
+      const row=rows[r];
+      const code=String(row[col.code]===undefined?'':row[col.code]).trim().replace(/\.0+$/,'');
+      if(!/^\d{5,7}$/.test(code)) continue;
+      const nomRaw=String(row[col.nom]===undefined?'':row[col.nom]).replace(/[\r\n\t\u2028\u2029]+/g,' ').trim();
+      (byCode[code]=byCode[code]||[]).push({code:code,sheet:sname,key:key,nom:nomRaw,
+        fourn:txt(col.fourn,row),cf:txt(col.cf,row),emp:txt(col.emp,row),prix:col.prix===-1?0:num(row[col.prix]),
+        hasG:colG!==-1,hasP:colP!==-1,
+        qG:colG!==-1?Math.max(0,Math.round(num(row[colG]))):0,
+        qP:colP!==-1?Math.max(0,Math.round(num(row[colP]))):0});
+    }
+  });
+  return {byCode:byCode,sheets:sheets};
+}
+// un code présent dans plusieurs onglets : on prend l'onglet de sa catégorie ; si les données divergent => conflit (ignoré)
+function excelPickEntry(entries,cat){
+  if(entries.length===1) return {e:entries[0]};
+  const pref=entries.filter(function(e){return EXCEL_SHEET_CAT[e.key]===cat;});
+  if(pref.length===1) return {e:pref[0]};
+  if(cat==='HTA'||cat==='Electrozingué'){const a=entries.filter(function(e){return EXCEL_NO_NEW.indexOf(e.key)!==-1;});if(a.length===1) return {e:a[0]};}
+  const e0=entries[0];
+  const same=entries.every(function(e){return e.nom===e0.nom&&e.fourn===e0.fourn&&e.cf===e0.cf&&e.prix===e0.prix&&e.qG===e0.qG&&e.qP===e0.qP&&e.emp===e0.emp;});
+  return same?{e:e0}:{conflict:true};
+}
+// compare Excel et application : ne retient que ce qui change
+function excelBuildDiff(parsed){
+  const items=[...CATALOGUE,...customRefsCache];
+  const D={noms:[],fourn:[],prix:[],emp:[],stockG:[],stockP:[],nouveaux:[],bloques:[],conflits:[],crayon:0,lus:0};
+  const app={}, orig={}; items.forEach(function(p){app[p.code]=p;}); CATALOGUE.forEach(function(p){orig[p.code]=p.nom;});
+  const chosen={};
+  items.forEach(function(p){
+    const ent=parsed.byCode[p.code]; if(!ent) return;
+    const pk=excelPickEntry(ent,p.cat);
+    if(pk.conflict){D.conflits.push(p.code);return;}
+    chosen[p.code]=pk.e; D.lus++;
+  });
+  // familles à menu déroulant (même image, même catégorie)
+  const fam={}; items.forEach(function(p){const n=IMG_MAP[p.code]; if(n){(fam[n]=fam[n]||[]).push(p);}});
+  const famOf={};
+  Object.keys(fam).forEach(function(n){const g=fam[n]; if(g.length<2||new Set(g.map(function(x){return x.cat;})).size!==1) return; g.forEach(function(x){famOf[x.code]=g;});});
+  // désignations
+  const cand={};
+  Object.keys(chosen).forEach(function(code){
+    const e=chosen[code]; if(!e.nom) return;
+    const cur=customNamesCache[code]||app[code].nom;
+    if(e.nom!==cur) cand[code]=e.nom;
+  });
+  const blocked={}, seen=new Set();
+  Object.keys(cand).forEach(function(code){
+    const g=famOf[code]; if(!g||seen.has(g)) return; seen.add(g);
+    const nm=function(x){return customNamesCache[x.code]||x.nom;};
+    const before=g.map(nm), after=g.map(function(x){return cand[x.code]!==undefined?cand[x.code]:nm(x);});
+    const gb=commonGenericName(before), ga=commonGenericName(after);
+    if(ga.length<gb.length){   // le nom de la carte du menu serait raccourci : on n'applique pas
+      const codes=g.filter(function(x){return cand[x.code]!==undefined;}).map(function(x){return x.code;});
+      codes.forEach(function(c){blocked[c]=true;});
+      D.bloques.push({avant:gb,apres:ga,codes:codes});
+    }
+  });
+  Object.keys(cand).forEach(function(code){
+    if(blocked[code]) return;
+    const cur=customNamesCache[code]||app[code].nom, revert=(cand[code]===orig[code]&&customNamesCache[code]!==undefined);
+    D.noms.push({code:code,old:cur,nom:cand[code],revert:revert});
+    if(customNamesCache[code]!==undefined&&!revert) D.crayon++;
+  });
+  // fournisseur, réf. fournisseur, prix, emplacement, stocks
+  Object.keys(chosen).forEach(function(code){
+    const e=chosen[code], cur=REFS_FOURN[code]||{};
+    const nf=(e.fourn&&e.fourn!==String(cur.fournisseur||''))?e.fourn:null, nc=(e.cf&&e.cf!==String(cur.code_fourn||''))?e.cf:null;
+    if(nf!==null||nc!==null) D.fourn.push({code:code,fournisseur:nf!==null?nf:String(cur.fournisseur||''),code_fourn:nc!==null?nc:String(cur.code_fourn||''),old:String(cur.fournisseur||'')+' / '+String(cur.code_fourn||'')});
+    const np=e.prix>0?Math.round(e.prix*100)/100:0;
+    if(np>0&&Math.abs((parseFloat(cur.prix)||0)-np)>0.004) D.prix.push({code:code,prix:np,old:parseFloat(cur.prix)||0});
+    const emp=(e.emp&&['0','x','-'].indexOf(e.emp.toLowerCase())===-1)?e.emp:'';
+    if(emp&&emp!==(EMPLACEMENTS[code]||'')) D.emp.push({code:code,emp:emp,old:EMPLACEMENTS[code]||''});
+    if(e.hasG||e.hasP){
+      const g=e.hasG?e.qG:0, p=e.hasP?e.qP:0;
+      if(g!==stockOf(code,'gros')) D.stockG.push({code:code,qty:g,old:stockOf(code,'gros')});
+      if(p!==stockOf(code,'particulier')) D.stockP.push({code:code,qty:p,old:stockOf(code,'particulier')});
+    }
+  });
+  // nouveaux articles (codes du fichier absents de l'appli) : onglets de catégorie uniquement, jamais ACIER / Mapress / PVC-C
+  Object.keys(parsed.byCode).forEach(function(code){
+    if(app[code]) return;
+    const ent=parsed.byCode[code].filter(function(e){return EXCEL_NO_NEW.indexOf(e.key)===-1&&EXCEL_SHEET_CAT[e.key]&&e.nom;});
+    if(!ent.length) return;
+    const e=ent[0];
+    if(!ent.every(function(x){return x.key===e.key&&x.nom===e.nom;})){D.conflits.push(code);return;}
+    const emp=(e.emp&&['0','x','-'].indexOf(e.emp.toLowerCase())===-1)?e.emp:'';
+    D.nouveaux.push({code:code,nom:e.nom,cat:EXCEL_SHEET_CAT[e.key],fournisseur:e.fourn,code_fourn:e.cf,prix:e.prix>0?Math.round(e.prix*100)/100:0,emp:emp,qG:e.hasG?e.qG:0,qP:e.hasP?e.qP:0});
+  });
+  D.nouveaux.sort(function(a,b){return parseInt(a.code,10)-parseInt(b.code,10);});
+  return D;
+}
+function excelSyncStart(event){
+  const file=event.target.files[0]; if(!file) return;
+  event.target.value='';
+  if(currentRole!=='admin'){showToast('Réservé à l\'admin');return;}
+  showToast('Lecture du fichier Excel...');
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellFormula:false});
+      const parsed=excelParseTabs(wb);
+      if(!parsed.sheets.length){showToast('❌ Aucun onglet de catégorie reconnu dans ce fichier');return;}
+      const D=excelBuildDiff(parsed);
+      const total=D.noms.length+D.fourn.length+D.prix.length+D.emp.length+D.stockG.length+D.stockP.length+D.nouveaux.length;
+      excelSyncState={diff:D,sheets:parsed.sheets};
+      if(!total&&!D.conflits.length){showToast('✅ Rien à mettre à jour : l\'application est déjà à jour'+(D.bloques.length?' ('+D.bloques.length+' famille(s) de menu laissée(s) telle(s) quelle(s))':''));return;}
+      excelSyncRender();
+      document.getElementById('excelSyncModal').style.display='flex';
+    }catch(err){showToast('❌ Erreur de lecture du fichier Excel');console.error(err);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function excelSyncClose(){ document.getElementById('excelSyncModal').style.display='none'; excelSyncState=null; }
+function excelSyncRender(){
+  const D=excelSyncState.diff, el=document.getElementById('excelSyncBody');
+  const cut=function(s,n){s=String(s);return editEsc(s.length>n?s.slice(0,n-1)+'…':s);};
+  const sec=function(id,label,list,ex,warn){
+    if(!list.length) return '<div style="display:flex;justify-content:space-between;padding:8px 0;color:var(--muted);font-size:0.85rem;border-bottom:1px solid var(--border)"><span>'+label+'</span><b>0</b></div>';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--border)"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;font-weight:700"><input type="checkbox" id="xs_'+id+'" checked style="width:18px;height:18px"><span style="flex:1">'+label+'</span><span style="color:#e67e22">'+list.length+'</span></label>'
+      +'<div style="font-size:0.74rem;color:var(--muted);margin:4px 0 0 26px;overflow-wrap:anywhere">'+list.slice(0,4).map(ex).join('<br>')+(list.length>4?'<br>…':'')+'</div>'+(warn?'<div style="font-size:0.74rem;color:#c0392b;margin:4px 0 0 26px">'+warn+'</div>':'')+'</div>';
+  };
+  let html='<p style="font-size:0.8rem;color:var(--muted);margin-bottom:8px">'+D.lus+' article(s) de l\'appli retrouvés dans '+excelSyncState.sheets.length+' onglet(s). Voici ce qui va changer — décochez ce que vous ne voulez pas appliquer.</p>';
+  html+=sec('noms','Désignations',D.noms,function(x){return x.code+' : '+cut(x.old,28)+' → '+cut(x.nom,28);},D.crayon?D.crayon+' remplacent une désignation modifiée au crayon':'');
+  html+=sec('fourn','Fournisseurs / réf. fournisseur',D.fourn,function(x){return x.code+' : '+cut(x.old,24)+' → '+cut(x.fournisseur+' / '+x.code_fourn,24);});
+  html+=sec('prix','Prix',D.prix,function(x){return x.code+' : '+x.old.toFixed(2)+' € → '+x.prix.toFixed(2)+' €';});
+  html+=sec('emp','Emplacements',D.emp,function(x){return x.code+' : '+cut(x.old||'—',14)+' → '+cut(x.emp,14);});
+  html+=sec('stockG','🔵 Stock gros chantier (colonne QUANTITE GC)',D.stockG,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
+  html+=sec('stockP','🔴 Stock particulier (colonne QUANTITE MAG)',D.stockP,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
+  html+=sec('nouveaux','Nouveaux articles à créer',D.nouveaux,function(x){return x.code+' : '+cut(x.nom,34)+' ['+x.cat+']';});
+  if(D.bloques.length) html+='<div style="margin-top:10px;padding:10px;background:#fff3cd;border-radius:8px;font-size:0.78rem;color:#856404"><b>⚠️ Non appliqué (nom de carte du menu raccourci) :</b><br>'+D.bloques.map(function(b){return '« '+cut(b.avant,40)+' » → « '+cut(b.apres,40)+' » ('+b.codes.length+' réf.)';}).join('<br>')+'<br>Corrigez ces noms dans le fichier pour qu\'ils soient homogènes.</div>';
+  if(D.conflits.length) html+='<div style="margin-top:10px;padding:10px;background:#fdecea;border-radius:8px;font-size:0.78rem;color:#c0392b"><b>Ignoré (présent dans plusieurs onglets avec des données différentes) :</b> '+D.conflits.slice(0,12).map(editEsc).join(', ')+(D.conflits.length>12?'…':'')+'</div>';
+  el.innerHTML=html;
+  document.getElementById('excelSyncApplyBtn').style.display=(D.noms.length+D.fourn.length+D.prix.length+D.emp.length+D.stockG.length+D.stockP.length+D.nouveaux.length)?'':'none';
+}
+function excelSyncApply(){
+  const S=excelSyncState; if(!S||currentRole!=='admin') return;
+  const D=S.diff, now=new Date().toISOString();
+  const on=function(id){const e=document.getElementById('xs_'+id);return !!e&&e.checked;};
+  const ops=[], refsPatch={}, empPatch={}, n={};
+  if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
+  if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qty:x.qty,updatedAt:now},{merge:true});});}); }
+  if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qtyP:x.qty,updatedAt:now},{merge:true});});}); }
+  if(on('nouveaux')){
+    n.nouveaux=D.nouveaux.length;
+    D.nouveaux.forEach(function(x){
+      ops.push(function(b){b.set(db.collection('custom_refs').doc(x.code),{code:x.code,nom:x.nom,cat:x.cat,fournisseur:x.fournisseur,code_fourn:x.code_fourn,prix:x.prix?String(x.prix):'',createdAt:now,source:'excel'});});
+      // le stock d'un nouvel article respecte les cases « stock » (une case absente = rien à décider)
+      const okG=!document.getElementById('xs_stockG')||on('stockG'), okP=!document.getElementById('xs_stockP')||on('stockP');
+      const so={updatedAt:now}; if(okG) so.qty=x.qG; if(okP) so.qtyP=x.qP;
+      if((okG&&x.qG)||(okP&&x.qP)) ops.push(function(b){b.set(db.collection('stock').doc(x.code),so,{merge:true});});
+      if(x.fournisseur||x.code_fourn||x.prix) refsPatch[x.code]={fournisseur:x.fournisseur,code_fourn:x.code_fourn,prix:x.prix?String(x.prix):''};
+      if(x.emp) empPatch[x.code]=x.emp;
+    });
+  }
+  if(on('fourn')){ n.fourn=D.fourn.length; D.fourn.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{fournisseur:x.fournisseur,code_fourn:x.code_fourn});}); }
+  if(on('prix')){ n.prix=D.prix.length; D.prix.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{prix:String(x.prix)});}); }
+  if(on('emp')){ n.emp=D.emp.length; D.emp.forEach(function(x){empPatch[x.code]=x.emp;}); }
+  if(!ops.length&&!Object.keys(refsPatch).length&&!Object.keys(empPatch).length){showToast('Rien de coché : aucune modification');return;}
+  const btn=document.getElementById('excelSyncApplyBtn'); if(btn){btn.disabled=true;btn.textContent='⏳ Enregistrement…';}
+  const chunks=[]; for(let i=0;i<ops.length;i+=400) chunks.push(ops.slice(i,i+400));
+  let p=Promise.resolve();
+  chunks.forEach(function(ch,idx){ p=p.then(function(){ if(chunks.length>1) showToast('Enregistrement '+(idx+1)+'/'+chunks.length+'...'); const b=db.batch(); ch.forEach(function(f){f(b);}); return b.commit(); }); });
+  if(Object.keys(refsPatch).length) p=p.then(function(){return db.collection('config').doc('refs_fourn').set(Object.assign({_updatedAt:now},refsPatch),{merge:true});}).then(function(){Object.keys(refsPatch).forEach(function(c){REFS_FOURN[c]=refsPatch[c];});});
+  if(Object.keys(empPatch).length) p=p.then(function(){return db.collection('config').doc('emplacements').set(Object.assign({_updatedAt:now},empPatch),{merge:true});}).then(function(){Object.assign(EMPLACEMENTS,empPatch);});
+  p.then(function(){
+    const parts=[]; if(n.noms) parts.push(n.noms+' désignation(s)'); if(n.fourn) parts.push(n.fourn+' fournisseur(s)'); if(n.prix) parts.push(n.prix+' prix'); if(n.emp) parts.push(n.emp+' emplacement(s)');
+    if(n.stockG) parts.push(n.stockG+' stock(s) 🔵'); if(n.stockP) parts.push(n.stockP+' stock(s) 🔴'); if(n.nouveaux) parts.push(n.nouveaux+' nouvel(s) article(s)');
+    showToast('✅ Synchronisation terminée : '+parts.join(', '));
+    excelSyncClose();
+    filterProducts(); if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
+  }).catch(function(e){
+    if(btn){btn.disabled=false;btn.textContent='✅ Appliquer';}
+    showToast((e&&e.code==='resource-exhausted')?'❌ Quota Firebase atteint : réessayez demain (une partie a pu être enregistrée)':'❌ Erreur d\'enregistrement'+((e&&e.code)?' ('+e.code+')':'')+' — relancez la synchronisation');
+  });
+}
+function loadEmplacementsFromFirebase(){
+  return db.collection('config').doc('emplacements').get().then(function(doc){
+    if(doc.exists){ const d=doc.data(); Object.keys(d).forEach(function(k){ if(k!=='_updatedAt') EMPLACEMENTS[k]=d[k]; }); }
+  }).catch(function(){});
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -5204,6 +5595,8 @@ function showTab(tab){
   document.getElementById('tabCorbeille').style.display=tab==='corbeille'?'block':'none';
   document.getElementById('tabInventaire').style.display=tab==='inventaire'?'block':'none';
   document.getElementById('tabReappro').style.display=tab==='reappro'?'block':'none';
+  document.getElementById('tabChantiers').style.display=tab==='chantiers'?'block':'none';
+  document.getElementById('tabDlm').style.display=tab==='dlm'?'block':'none';
   document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',
     (i===0&&tab==='catalogue')||(i===1&&tab==='orders')||(i===2&&tab==='users')||(i===3&&tab==='suivi')||(i===4&&tab==='stats')||(i===5&&tab==='corbeille')));
   if(tab==='orders') renderOrders();
@@ -5213,6 +5606,8 @@ function showTab(tab){
   if(tab==='corbeille') renderCorbeille();
   if(tab==='inventaire') renderInventaire();
   if(tab==='reappro') renderReappro();
+  if(tab==='chantiers') renderChantiersTab();
+  if(tab==='dlm') renderDlm();
 }
 function setBnav(tab){
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
@@ -5227,6 +5622,24 @@ function setCat(c){
   currentCat=c;
   document.getElementById('catScroll').innerHTML=CATS.map(cat=>`<button class="cat-btn${cat===c?' active':''}" onclick="setCat('${cat}')">${CAT_ICON[cat]||'\uD83D\uDCE6'} ${cat}</button>`).join('');
   filterProducts();
+}
+// nom commun d'une famille (préfixe commun coupé à un mot entier) : sert au nom de la carte du menu déroulant
+function commonGenericName(allNoms){
+  const firstName=allNoms[0];
+  let commonLen=firstName.length;
+  for(let k=1;k<allNoms.length;k++){
+    let cl=0;
+    for(let i=0;i<Math.min(commonLen,allNoms[k].length);i++){
+      if(firstName[i]===allNoms[k][i]) cl=i+1; else break;
+    }
+    commonLen=cl;
+  }
+  let genericRaw=firstName.substring(0,commonLen);
+  if(genericRaw.length < firstName.length && genericRaw.length > 0 && firstName[genericRaw.length] !== ' '){
+    const lastSpace=genericRaw.lastIndexOf(' ');
+    genericRaw=lastSpace>0?genericRaw.substring(0,lastSpace):genericRaw;
+  }
+  return genericRaw.trim()||firstName;
 }
 function filterProducts(){
   const q=normTxt(document.getElementById('searchInput').value);
@@ -5282,24 +5695,7 @@ function filterProducts(){
         .sort((a,b)=>idxOf.get(a)-idxOf.get(b));
 
       // Extract generic name - find longest common prefix across ALL items
-      const allNoms=group.map(x=>x.nom);
-      const firstName=allNoms[0];
-      let commonLen=firstName.length;
-      for(let k=1;k<allNoms.length;k++){
-        let cl=0;
-        for(let i=0;i<Math.min(commonLen,allNoms[k].length);i++){
-          if(firstName[i]===allNoms[k][i]) cl=i+1; else break;
-        }
-        commonLen=cl;
-      }
-      // Trim to last complete word boundary
-      let genericRaw=firstName.substring(0,commonLen);
-      // If ends mid-word, go back to last space
-      if(genericRaw.length < firstName.length && genericRaw.length > 0 && firstName[genericRaw.length] !== ' '){
-        const lastSpace=genericRaw.lastIndexOf(' ');
-        genericRaw=lastSpace>0?genericRaw.substring(0,lastSpace):genericRaw;
-      }
-      const genericName=genericRaw.trim()||firstName;
+      const genericName=commonGenericName(group.map(x=>x.nom));
 
       // Extract dimensions (suffix after common prefix)
       const options=group.map(x=>{
@@ -5308,7 +5704,7 @@ function filterProducts(){
       });
 
       const selectId='var_'+p.code;
-      const stockHtml=currentRole==='admin'?(()=>{const q=stockCache[p.code];if(q===undefined||q===null)return '';if(q===0)return '<div style="font-size:0.7rem;color:var(--red);font-weight:600;margin-bottom:4px">❌ Rupture</div>';if(q<=invSeuilAlerte)return `<div style="font-size:0.7rem;color:var(--orange);font-weight:600;margin-bottom:4px">⚠️ Stock: ${q}</div>`;return `<div style="font-size:0.7rem;color:var(--green);font-weight:600;margin-bottom:4px">✅ Stock: ${q}</div>`;})():'';
+      const stockHtml=currentRole==='admin'?stockBadgesHtml(p.code):'';
 
       return `<div class="product-card">
         <div class="product-img-wrap">${imgHtml}</div>
@@ -5339,7 +5735,7 @@ function filterProducts(){
       <div class="product-name">${getEffectiveName(p.code,p.nom)}</div>
       ${BARRE_LONGUEURS[p.code]?`<div style="font-size:0.72rem;color:var(--blue);font-weight:600;margin-bottom:3px">📏 Barre ${BARRE_LONGUEURS[p.code]}m — qté en barres</div>`:''}
       ${currentRole==='admin'?`<button data-code="${p.code}" onclick="editNomFromBtn(this)" style="background:none;border:none;cursor:pointer;font-size:0.72rem;color:var(--muted);padding:0 0 4px 0;text-decoration:underline;">✏️ Modifier</button>`:''}
-      ${currentRole==='admin'?(()=>{const q=stockCache[p.code];if(q===undefined||q===null)return '';if(q===0)return '<div style="font-size:0.7rem;color:var(--red);font-weight:600;margin-bottom:4px">❌ Rupture</div>';if(q<=invSeuilAlerte)return `<div style="font-size:0.7rem;color:var(--orange);font-weight:600;margin-bottom:4px">⚠️ Stock: ${q}</div>`;return `<div style="font-size:0.7rem;color:var(--green);font-weight:600;margin-bottom:4px">✅ Stock: ${q}</div>`;})():''}
+      ${currentRole==='admin'?stockBadgesHtml(p.code):''}
       <div class="qty-control">
         <button class="qty-btn" onclick="changeQty('${p.code}',-1)">&#8722;</button>
         <input class="qty-input" type="number" min="1" value="1" id="qty_${p.code}">
@@ -5398,8 +5794,7 @@ function loadCart(){
     cart=data.cart||[];
     updateCartCount();
     if(data.chantier) setTimeout(()=>{
-      const sel=document.getElementById('cartChantier');
-      if(sel) sel.value=data.chantier;
+      pickerSetValue('cart',data.chantier);
     },500);
     if(data.livraison) setTimeout(()=>setLivraison(data.livraison),500);
     if(data.comment) setTimeout(()=>{
@@ -5412,9 +5807,8 @@ function clearCart(){
   cart=[];updateCartCount();
   document.getElementById('cartChantier').value='';
   document.getElementById('cartComment').value='';
-  const nomEl=document.getElementById('cartNomParticulier');
-  if(nomEl) nomEl.value='';
   setLivraison('entreprise');
+  pickerSync('cart');
   localStorage.removeItem('delamotte_cart_'+currentUser);
 }
 
@@ -5449,19 +5843,9 @@ function updateCartCount(){
 function openCart(){
   updateChantierSelect();
   renderCartItems();
-  const isParticulier=currentRole==='particulier';
-  document.getElementById('cartChantier').style.display=isParticulier?'none':'';
-  document.getElementById('cartChef').style.display=isParticulier?'none':'';
-  document.getElementById('livraisonBlock').style.display=isParticulier?'none':'';
-  document.getElementById('particulierBlock').style.display=isParticulier?'block':'none';
-  if(isParticulier){
-    const userData=getAllUsers()[currentUser];
-    const service=userData&&userData.chantierFixe?userData.chantierFixe:'001 Particulier';
-    document.getElementById('particulierService').textContent=service;
-    document.getElementById('particulierUser').textContent=currentUser;
-  }
   document.getElementById('cartPanel').classList.add('open');
 }
+
 function closeCart(){document.getElementById('cartPanel').classList.remove('open');}
 function closeCartOutside(e){if(e.target===document.getElementById('cartPanel'))closeCart();}
 function renderCartItems(){
@@ -5498,38 +5882,29 @@ function setLivraison(val){
 }
 
 function sendOrder(){
-  const isParticulier=currentRole==='particulier';
-  const userData=getAllUsers()[currentUser];
-  const chantier=isParticulier?(userData&&userData.chantierFixe?userData.chantierFixe:'001 Particulier'):document.getElementById('cartChantier').value.trim();
-  const chef=isParticulier
-    ? (document.getElementById('cartNomParticulier')?document.getElementById('cartNomParticulier').value.trim():'')
-    : (currentRole==='admin'?document.getElementById('cartChef').value.trim():currentUser);
+  const chantier=document.getElementById('cartChantier').value.trim();
+  const chef=currentRole==='admin'?(document.getElementById('cartChef').value.trim()||currentUser):currentUser;
   const comment=document.getElementById('cartComment').value.trim();
   if(!cart.length){showToast('Ajoutez des articles au panier');return;}
-  if(!isParticulier&&!chantier){showToast('Renseignez le chantier');return;}
-  if(isParticulier){
-    const nomChantier=document.getElementById('cartNomParticulier');
-    const val=nomChantier?nomChantier.value.trim():'';
-    if(!val){
-      if(nomChantier){nomChantier.style.borderColor='var(--red)';nomChantier.focus();}
-      showToast('⚠️ Renseignez le nom du chantier !');
-      return;
-    }
+  if(!chantier||!pickerList().some(function(c){return c.name===chantier;})){
+    const f=document.getElementById('cartPickerInput'); if(f&&f.focus) f.focus();
+    showToast('⚠️ Choisissez un chantier dans la liste');return;
   }
+  const service=chantierSvcByName(chantier);
   const date=new Date().toLocaleString('fr-FR');
   // Get next sequential number from Firebase
   db.collection('meta').doc('counter').get().then(doc=>{
     const current=(doc.exists?doc.data().count:0)+1;
     const id='CMD-'+String(current).padStart(4,'0');
-    const livraison=document.getElementById('cartLivraison')?.value||'entreprise';
-    const order={id,chantier,chef:chef,date,comment,livraison,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
+    const livraison=service==='particulier'?'':(document.getElementById('cartLivraison')?.value||'entreprise');
+    const order={id,chantier,service,chef:chef,date,comment,livraison,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
     const batch=db.batch();
     batch.set(db.collection('orders').doc(id),order);
     batch.set(db.collection('meta').doc('counter'),{count:current});
     return batch.commit().then(()=>({id,order}));
   }).then(({id,order})=>{
     emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
-      order_id:id,chantier,chef:order.chef,date,
+      order_id:id,chantier:(service==='particulier'?'001 Particulier — ':'')+chantier,chef:order.chef,date,
       articles:cart.map(i=>i.barres?'- ['+i.code+'] '+i.nom+' x '+i.barres+' barre'+(i.barres>1?'s':'')+' ('+i.qty+'ml)':'- ['+i.code+'] '+i.nom+' x '+i.qty).join('\n'),
       comment:comment||'(aucun)',total_articles:cart.reduce((s,i)=>s+(i.barres||i.qty),0),
       total_refs:cart.length,to_email:EMAIL_MAGASIN
@@ -5539,6 +5914,7 @@ function sendOrder(){
     closeCart();showToast('Commande '+id+' envoyée !');
   }).catch(()=>showToast('Erreur envoi commande'));
 }
+
 function getOrders(){try{return JSON.parse(localStorage.getItem('delamotte_orders')||'[]');}catch{return[];}}
 function saveOrders(o){localStorage.setItem('delamotte_orders',JSON.stringify(o));}
 function listenOrders(){
@@ -5548,22 +5924,23 @@ function listenOrders(){
     renderOrders();updateOrdersBadge();renderDashboard();
   });
 }
+// Règles de visibilité :
+//  - admin et comptable : toutes les commandes
+//  - conducteur : toutes les commandes de SON service (gros chantier OU 001 Particulier), jamais celles de l'autre service
+//  - chef, particulier, atelier : uniquement leurs propres commandes
 function getVisibleOrders(all){
   if(currentRole==='admin'||currentRole==='comptable') return all;
-  if(currentRole==='conducteur'){
-    // Conducteur voit ses commandes + toutes les commandes des particuliers
-    const chantiersFull=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
-    const mesChantiersNoms=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
-    const allUsers=getAllUsers();
-    const particulierChantiers=Object.values(allUsers)
-      .filter(u=>u.role==='particulier'&&u.chantierFixe)
-      .map(u=>u.chantierFixe);
-    const visibleChantiers=[...new Set([...mesChantiersNoms,...particulierChantiers])];
-    return all.filter(o=>o.user===currentUser||visibleChantiers.includes(o.chantier));
-  }
-  // Particulier et chef : uniquement ses propres commandes
-  return all.filter(o=>o.user===currentUser);
+  if(currentRole==='conducteur'){ const s=mySvc(); return all.filter(function(o){return orderSvc(o)===s;}); }
+  return all.filter(function(o){return o.user===currentUser;});
 }
+// plus récent en premier (partout)
+function sortOrdersDesc(list){
+  return [...list].sort(function(a,b){
+    const c=String(b.createdAt||'').localeCompare(String(a.createdAt||''));
+    return c!==0?c:String(b.id).localeCompare(String(a.id),'fr',{numeric:true});
+  });
+}
+
 function renderOrders(){
   const all=getOrders();
   const vis=getVisibleOrders(all);
@@ -5592,7 +5969,7 @@ function renderOrders(){
     const d=o.date.split(' ')[0].split('/').reverse().join('-');
     return d<=dateTo;
   });
-  filtered=[...filtered].reverse();
+  filtered=sortOrdersDesc(filtered);
   const el=document.getElementById('ordersList');
   if(!filtered.length){el.innerHTML='<p style="color:var(--muted);text-align:center;padding:30px">Aucune commande</p>';return;}
   el.innerHTML=filtered.map(o=>`
@@ -5601,7 +5978,7 @@ function renderOrders(){
         <span class="order-id">${o.id}</span>
         <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitee':'En attente'}</span>
       </div>
-      <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${o.user&&getAllUsers()[o.user]&&getAllUsers()[o.user].role==='particulier'?'<span style="background:#f3e5f5;color:#8e44ad;padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">🏠 '+o.user+'</span>':''} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
+      <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${(()=>{const s=orderSvc(o);return '<span style="background:'+(s==='particulier'?'#fdecea':'#e8f4fd')+';color:'+(s==='particulier'?'#c0392b':'#2980b9')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(s==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')+'</span>';})()} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
       ${o.dateLivraison?`<div class="order-info" style="color:var(--green);font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
       ${orderEditInfoHtml(o)}
@@ -5794,30 +6171,21 @@ function listenRetours(){
   });
 }
 function retoursVisibles(){
-  return (currentRole==='admin'||currentRole==='comptable')?retoursCache:retoursCache.filter(function(r){return r.user===currentUser;});
+  if(currentRole==='admin'||currentRole==='comptable') return retoursCache;
+  if(currentRole==='conducteur'){ const s=mySvc(); return retoursCache.filter(function(r){return retourSvc(r)===s;}); }
+  return retoursCache.filter(function(r){return r.user===currentUser;});
 }
+
 function updateRetoursBadge(){
   const n=retoursVisibles().filter(function(r){return r.status==='pending';}).length;
   const el=document.getElementById('retoursBadge'); if(el) el.textContent=n?'('+n+')':'';
 }
-function retourChantierList(){
-  let list=getChantiers().slice();
-  if(currentRole==='chef'){
-    const full=JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');
-    const siens=full.filter(function(c){return c.chef===currentUser||c.name===currentUser;}).map(function(c){return c.name;});
-    if(siens.length) list=siens;
-  }
-  return list;
-}
-
 function openRetourModal(){
   if(currentRole==='comptable'){showToast('Accès en lecture seule');return;}
-  const isP=currentRole==='particulier';
   retourState={items:[],bad:{}};
-  document.getElementById('retChantierSel').innerHTML=retourChantierList().map(function(c){return '<option value="'+editEsc(c)+'">'+editEsc(c)+'</option>';}).join('');
-  document.getElementById('retChantierBlock').style.display=isP?'none':'block';
-  document.getElementById('retChefLabel').textContent=isP?'Nom du chantier *':'Rendu par';
-  document.getElementById('retChef').value=isP?'':currentUser;
+  document.getElementById('retChantierSel').value='';
+  pickerSetOptions('ret');
+  document.getElementById('retChef').value=currentUser;
   document.getElementById('retMotif').innerHTML=RETOUR_MOTIFS.map(function(m){return '<option value="'+editEsc(m)+'">'+editEsc(m)+'</option>';}).join('');
   document.getElementById('retComment').value='';
   document.getElementById('retAddSearch').value='';
@@ -5825,6 +6193,7 @@ function openRetourModal(){
   renderRetourItems();
   document.getElementById('retourModal').style.display='flex';
 }
+
 function closeRetourModal(){ document.getElementById('retourModal').style.display='none'; retourState=null; }
 function renderRetourItems(){
   const el=document.getElementById('retItems');
@@ -5878,15 +6247,10 @@ function saveRetour(){
   if(!retourState) return;
   if(Object.keys(retourState.bad).length){showToast('⚠️ Une quantité est invalide (minimum 1)');return;}
   if(!retourState.items.length){showToast('⚠️ Ajoute au moins un article');return;}
-  const isP=currentRole==='particulier';
-  const userData=getAllUsers()[currentUser];
-  const chantier=isP?((userData&&userData.chantierFixe)?userData.chantierFixe:'001 Particulier'):document.getElementById('retChantierSel').value;
-  const nomSaisi=document.getElementById('retChef').value.trim();
-  if(!chantier){showToast('⚠️ Choisis un chantier');return;}
-  if(isP&&!nomSaisi){
-    const f=document.getElementById('retChef'); if(f&&f.style){f.style.borderColor='var(--red)';}
-    showToast('⚠️ Renseigne le nom du chantier');return;
-  }
+  const chantier=document.getElementById('retChantierSel').value.trim();
+  if(!chantier||!pickerList().some(function(c){return c.name===chantier;})){showToast('⚠️ Choisis un chantier dans la liste');return;}
+  const service=chantierSvcByName(chantier);
+  const renduPar=document.getElementById('retChef').value.trim()||currentUser;
   const motif=document.getElementById('retMotif').value;
   const comment=document.getElementById('retComment').value.trim();
   const items=retourState.items.map(function(it){return Object.assign({},it);});
@@ -5894,8 +6258,7 @@ function saveRetour(){
   db.collection('meta').doc('counter_retours').get().then(function(doc){
     const current=(doc.exists?doc.data().count:0)+1;
     const id='RET-'+String(current).padStart(4,'0');
-    const ret={id:id,chantier:chantier,renduPar:isP?currentUser:(nomSaisi||currentUser),motif:motif,comment:comment,items:items,status:'pending',user:currentUser,date:date,createdAt:new Date().toISOString(),deleted:false};
-    if(isP) ret.nomChantier=nomSaisi;
+    const ret={id:id,chantier:chantier,service:service,renduPar:renduPar,motif:motif,comment:comment,items:items,status:'pending',user:currentUser,date:date,createdAt:new Date().toISOString(),deleted:false};
     const batch=db.batch();
     batch.set(db.collection('retours').doc(id),ret);
     batch.set(db.collection('meta').doc('counter_retours'),{count:current});
@@ -5914,9 +6277,9 @@ function closeRetoursList(){ document.getElementById('retoursListModal').style.d
 function retourStatusBadge(r){
   if(r.status==='received'){
     const d=r.receivedAt?new Date(r.receivedAt).toLocaleDateString('fr-FR'):'';
-    return '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700">✅ Reçu'+(d?' le '+d:'')+(r.receivedBy?' par '+editEsc(r.receivedBy):'')+'</span>';
+    return '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700">✅ Traité'+(d?' le '+d:'')+(r.receivedBy?' par '+editEsc(r.receivedBy):'')+'</span>';
   }
-  return '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700">⏳ À réceptionner</span>';
+  return '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700">⏳ À traiter</span>';
 }
 function retourItemLine(it){
   const isB=it.barres!==undefined&&it.barres!==null;
@@ -5934,13 +6297,13 @@ function renderRetoursList(){
     const canReceive=currentRole==='admin'&&r.status==='pending';
     const canDelete=currentRole==='admin'||(r.user===currentUser&&r.status==='pending');
     return '<div style="border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;">'
-      +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b>'+editEsc(r.id)+'</b>'+retourStatusBadge(r)+'</div>'
+      +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><span><b>'+editEsc(r.id)+'</b> <span style="font-size:0.72rem;font-weight:700;color:'+(retourSvc(r)==='particulier'?'#c0392b':'#2980b9')+'">'+(retourSvc(r)==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')+'</span></span>'+retourStatusBadge(r)+'</div>'
       +'<div style="font-size:0.78rem;color:var(--muted);margin:4px 0;overflow-wrap:anywhere">'+editEsc(r.date||'')+' · '+editEsc(r.chantier||'')+(r.nomChantier?' — '+editEsc(r.nomChantier):'')+' · rendu par '+editEsc(r.renduPar||r.user||'')+' · '+editEsc(r.motif||'')+'</div>'
       +'<div style="font-size:0.82rem;margin:6px 0;overflow-wrap:anywhere">'+(r.items||[]).map(function(it){return '• '+retourItemLine(it);}).join('<br>')+'</div>'
       +(r.comment?'<div style="font-size:0.78rem;font-style:italic;margin-bottom:6px;overflow-wrap:anywhere">💬 '+editEsc(r.comment)+'</div>':'')
       +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
       +'<button onclick="printRetour(\''+r.id+'\')" style="'+bt+'background:#0077b6;">🖨️ Bon</button>'
-      +(canReceive?'<button onclick="retourReceiveOpen(\''+r.id+'\')" style="'+bt+'background:#27ae60;">✅ Réceptionner</button>':'')
+      +(canReceive?'<button onclick="retourReceiveOpen(\''+r.id+'\')" style="'+bt+'background:#27ae60;">✅ Traitée</button>':'')
       +(canDelete?'<button onclick="deleteRetour(\''+r.id+'\')" style="'+bt+'background:var(--red);">🗑️ '+(currentRole==='admin'?'Supprimer':'Annuler')+'</button>':'')
       +'</div></div>';
   }).join('');
@@ -5959,19 +6322,21 @@ function retourReceiveOpen(id){
   if(currentRole!=='admin'){showToast('Réservé au magasin');return;}
   const r=retoursCache.find(function(x){return x.id===id;});
   if(!r||r.status!=='pending') return;
+  const svc=retourSvc(r);
   retourReceiveId=id;
   retourReceiveState={qty:r.items.map(function(it){return editItemQtyView(it);}),bad:{}};
-  document.getElementById('retRecvTitle').textContent=r.id+' — '+r.chantier+(r.nomChantier?' — '+r.nomChantier:'');
+  document.getElementById('retRecvTitle').textContent=r.id+' — '+r.chantier+(r.nomChantier?' — '+r.nomChantier:'')+' · '+svcIcon(svc)+' stock '+(svc==='particulier'?'particulier':'gros chantier');
   document.getElementById('retRecvItems').innerHTML=r.items.map(function(it,i){
-    const isB=it.barres!==undefined&&it.barres!==null, st=stockCache[it.code]||0;
+    const isB=it.barres!==undefined&&it.barres!==null, st=stockOf(it.code,svc);
     const em=EMPLACEMENTS[it.code]?' · 📍 '+editEsc(EMPLACEMENTS[it.code]):'';
     return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">'
-      +'<div style="flex:1;min-width:0;font-size:0.82rem;"><span style="color:var(--muted);font-size:0.72rem">'+editEsc(it.code)+em+' · stock actuel : '+st+'</span><br><span style="font-weight:600;overflow-wrap:anywhere">'+editEsc(it.nom)+'</span></div>'
+      +'<div style="flex:1;min-width:0;font-size:0.82rem;"><span style="color:var(--muted);font-size:0.72rem">'+editEsc(it.code)+em+' · stock '+svcIcon(svc)+' actuel : '+st+'</span><br><span style="font-weight:600;overflow-wrap:anywhere">'+editEsc(it.nom)+'</span></div>'
       +'<div style="text-align:center;"><input type="number" min="0" value="'+retourReceiveState.qty[i]+'" oninput="retourReceiveQty('+i+',this.value)" style="width:64px;padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-size:0.9rem;background:var(--white);color:var(--text);">'
       +'<div id="retrecvinfo_'+i+'" style="font-size:0.68rem;color:var(--muted)">'+(isB?('barre'+(it.barres>1?'s':'')+' = '+it.qty+' ml'):'remis en stock')+'</div></div></div>';
   }).join('');
   document.getElementById('retourReceiveModal').style.display='flex';
 }
+
 function retourReceiveQty(i,v){
   const n=parseInt(v,10);
   if(!(n>=0)){retourReceiveState.bad[i]=true;return;}
@@ -5987,32 +6352,34 @@ function retourReceiveConfirm(){
   const r=retoursCache.find(function(x){return x.id===retourReceiveId;});
   if(!r||r.status!=='pending') return;
   if(Object.keys(retourReceiveState.bad).length){showToast('⚠️ Une quantité est invalide');return;}
+  const svc=retourSvc(r), fld=stockField(svc);
   const now=new Date().toISOString(), batch=db.batch(), lignes=[], reappro=[];
   r.items.forEach(function(it,i){
     const n=retourReceiveState.qty[i];
     if(!(n>0)) return;
     const stockQty=editItemSetQty(it,n).qty;           // en ml pour une barre
-    const current=stockCache[it.code]||0;
-    batch.set(db.collection('stock').doc(it.code),{qty:current+stockQty,updatedAt:now});
+    const current=stockOf(it.code,svc);
+    batch.set(db.collection('stock').doc(it.code),{[fld]:current+stockQty,updatedAt:now},{merge:true});
     lignes.push({code:it.code,nom:it.nom,recu:n,stock:stockQty});
-    // le réappro du chantier baisse d'autant, dans la limite de ce qu'il avait pris
+    // le réappro du chantier (et du service) baisse d'autant, dans la limite de ce qu'ils avaient pris
     const ex=reapproStockCache[it.code];
     if(ex&&ex.totalQty>0){
-      const chants=Object.assign({},ex.chantiers||{});
-      const dec=Math.min(stockQty,chants[r.chantier]||0,ex.totalQty);
+      const chants=Object.assign({},ex.chantiers||{}), sv=Object.assign({},reapproServices(ex));
+      const dec=Math.min(stockQty,chants[r.chantier]||0,ex.totalQty,sv[svc]||0);
       if(dec>0){
         chants[r.chantier]-=dec; if(chants[r.chantier]<=0) delete chants[r.chantier];
+        sv[svc]=(sv[svc]||0)-dec;
         const nt=ex.totalQty-dec;
         if(nt<=0) batch.delete(db.collection('reappro_stock').doc(it.code));
-        else batch.set(db.collection('reappro_stock').doc(it.code),{code:it.code,nom:ex.nom||it.nom,totalQty:nt,chantiers:chants,updatedAt:now});
+        else batch.set(db.collection('reappro_stock').doc(it.code),{code:it.code,nom:ex.nom||it.nom,totalQty:nt,chantiers:chants,services:sv,updatedAt:now});
         reappro.push({code:it.code,moins:dec});
       }
     }
   });
   if(!lignes.length){showToast('⚠️ Aucune quantité reçue : rien à remettre en stock');return;}
-  batch.update(db.collection('retours').doc(r.id),{status:'received',receivedAt:now,receivedBy:currentUser,receivedItems:lignes,reapproAjuste:reappro});
+  batch.update(db.collection('retours').doc(r.id),{status:'received',receivedAt:now,receivedBy:currentUser,receivedItems:lignes,reapproAjuste:reappro,stockService:svc});
   batch.commit().then(function(){
-    showToast('✅ '+lignes.length+' référence(s) remise(s) en stock'+(reappro.length?' — réappro ajusté ('+reappro.length+')':''));
+    showToast('✅ Retour traité : '+lignes.length+' référence(s) remise(s) dans le stock '+svcIcon(svc)+(reappro.length?' — réappro ajusté ('+reappro.length+')':''));
     retourReceiveClose();
     renderRetoursList();
   }).catch(function(e){
@@ -6028,7 +6395,7 @@ function printRetour(id){
     const q=isB?it.barres+' barre'+(it.barres>1?'s':'')+' ('+it.qty+'ml)':it.qty;
     return '<tr><td>'+(i+1)+'</td><td>'+editEsc(it.code)+'</td><td>'+editEsc(it.nom)+'</td><td style="text-align:center;font-weight:700;white-space:nowrap">'+editEsc(EMPLACEMENTS[it.code]||'')+'</td><td style="text-align:center;font-weight:700">'+q+'</td></tr>';
   }).join('');
-  const statut=r.status==='received'?'Reçu'+(r.receivedAt?' le '+new Date(r.receivedAt).toLocaleDateString('fr-FR'):''):'À réceptionner';
+  const statut=r.status==='received'?'Traité'+(r.receivedAt?' le '+new Date(r.receivedAt).toLocaleDateString('fr-FR'):''):'À traiter';
   const meta=r.nomChantier
     ?'<div><div class="ml">SERVICE</div><div class="mv">'+editEsc(r.chantier)+'</div></div><div><div class="ml">DEMANDEUR</div><div class="mv">'+editEsc(r.renduPar||r.user)+'</div></div><div><div class="ml">NOM DU CHANTIER</div><div class="mv">'+editEsc(r.nomChantier)+'</div></div>'
     :'<div><div class="ml">CHANTIER</div><div class="mv">'+editEsc(r.chantier)+'</div></div><div><div class="ml">RENDU PAR</div><div class="mv">'+editEsc(r.renduPar||r.user)+'</div></div>';
@@ -6040,7 +6407,7 @@ function printRetour(id){
   +'<div class="meta">'+meta+'<div><div class="ml">MOTIF</div><div class="mv">'+editEsc(r.motif||'')+'</div></div><div><div class="ml">STATUT</div><div class="mv">'+editEsc(statut)+'</div></div>'+(r.comment?'<div><div class="ml">COMMENTAIRE</div><div class="mv">'+editEsc(r.comment)+'</div></div>':'')+'</div>'
   +'<table><thead><tr><th>#</th><th>Code</th><th>Designation</th><th>Emplacement</th><th>Qte</th></tr></thead><tbody>'+rows+'</tbody></table>'
   +'<div class="tot">'+(r.items||[]).length+' reference(s) rendue(s)</div>'
-  +'<div class="signs"><div class="sign"><p>Signature chantier / rendu par</p></div><div class="sign"><p>Signature Magasin / reception</p></div></div></body></html>';
+  +'<div class="signs"><div class="sign"><p>Signature chantier / rendu par</p></div><div class="sign"><p>Signature Magasin / traitement</p></div></div></body></html>';
   const blob=new Blob([html],{type:'text/html'}), url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url;a.target='_blank';a.rel='noopener';
   document.body.appendChild(a);a.click();
@@ -6051,7 +6418,8 @@ function markDone(id){
   const order=getOrders().find(o=>o.id===id);
   if(!order) return;
   pendingMarkDoneId=id;
-  document.getElementById('deliveryOrderId').textContent=id;
+  const svcO=orderSvc(order), icoO=svcIcon(svcO);
+  document.getElementById('deliveryOrderId').textContent=id+' · '+icoO+' '+SVC_LABEL[svcO];
   const tomorrow=new Date();
   tomorrow.setDate(tomorrow.getDate()+1);
   document.getElementById('deliveryDateInput').value=tomorrow.toISOString().split('T')[0];
@@ -6059,15 +6427,15 @@ function markDone(id){
   // Build items list with stock info
   let hasMissing=false;
   document.getElementById('deliveryItemsList').innerHTML=order.items.map((item,i)=>{
-    const stockQty=stockCache[item.code]||0;
+    const stockQty=stockOf(item.code,svcO);
     const enStock=stockQty>=item.qty;
     const stockPartiel=stockQty>0&&stockQty<item.qty;
     if(!enStock) hasMissing=true;
     const stockInfo=stockQty===0
-      ?`<span style="color:var(--red);font-size:0.72rem">❌ Rupture</span>`
+      ?`<span style="color:var(--red);font-size:0.72rem">❌ Rupture ${icoO}</span>`
       :stockPartiel
-        ?`<span style="color:var(--orange);font-size:0.72rem">⚠️ Stock: ${stockQty} / Demandé: ${item.qty}</span>`
-        :`<span style="color:var(--green);font-size:0.72rem">✅ Stock: ${stockQty}</span>`;
+        ?`<span style="color:var(--orange);font-size:0.72rem">⚠️ Stock ${icoO}: ${stockQty} / Demandé: ${item.qty}</span>`
+        :`<span style="color:var(--green);font-size:0.72rem">✅ Stock ${icoO}: ${stockQty}</span>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
       <input type="checkbox" id="dlv_${i}" ${enStock?'checked':''} onchange="updateMissingMsg()" style="width:16px;height:16px;cursor:pointer;flex-shrink:0">
       <label for="dlv_${i}" style="flex:1;cursor:pointer;font-size:0.82rem;">
@@ -6118,17 +6486,20 @@ function confirmMarkDone(){
       const now=new Date().toISOString();
       if(inStockItems.length){
         const batch=db.batch();
+        const svc=orderSvc(order);   // le service de la commande décide du stock déduit (bleu = gros chantier, rouge = particulier)
         inStockItems.forEach(item=>{
-          const current=stockCache[item.code]||0;
+          const current=stockOf(item.code,svc);
           const newQty=Math.max(0,current-item.qty);
-          batch.set(db.collection('stock').doc(item.code),{qty:newQty,updatedAt:now});
+          batch.set(db.collection('stock').doc(item.code),{[stockField(svc)]:newQty,updatedAt:now},{merge:true});
           const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
           const chantiers=Object.assign({},existing.chantiers);
           chantiers[order.chantier]=(chantiers[order.chantier]||0)+item.qty;
+          const services=Object.assign({},reapproServices(existing.totalQty?existing:null));
+          services[svc]=(services[svc]||0)+item.qty;
           batch.set(db.collection('reappro_stock').doc(item.code),{
             code:item.code,nom:item.nom,
             totalQty:existing.totalQty+item.qty,
-            chantiers:chantiers,updatedAt:now
+            chantiers:chantiers,services:services,updatedAt:now
           });
         });
         batch.commit().catch(()=>{});
@@ -6287,41 +6658,30 @@ function clearDateFilter(){
 function renderSuivi(){
   const all=getOrders();
   const el=document.getElementById('suiviContent');
-
-  // Filter by role
-  let orders=all;
-  if(currentRole==='chef'||currentRole==='particulier'){
-    orders=all.filter(o=>o.user===currentUser);
-  } else if(currentRole==='conducteur'){
-    const chantiersFull=getChantiersFull();
-    const myChantiers=chantiersFull.filter(c=>c.conducteur===currentUser).map(c=>c.name);
-    const allUsers=getAllUsers();
-    const particulierChantiers=Object.values(allUsers)
-      .filter(u=>u.role==='particulier'&&u.chantierFixe)
-      .map(u=>u.chantierFixe);
-    const visibleChantiers=[...new Set([...myChantiers,...particulierChantiers])];
-    orders=all.filter(o=>o.user===currentUser||visibleChantiers.includes(o.chantier));
-  }
-
+  const orders=getVisibleOrders(all);
   if(!orders.length){el.innerHTML='<div class="suivi-empty">📭 Aucune commande pour le moment</div>';return;}
-
-  const title=currentRole==='chef'||currentRole==='particulier'?'📋 Mes commandes':currentRole==='conducteur'?'🏗️ Commandes de mes chantiers':'🏗️ Suivi par chantier';
-
+  const own=(currentRole==='chef'||currentRole==='particulier'||currentRole==='atelier');
+  const title=own?'📋 Mes commandes':currentRole==='conducteur'
+    ?(mySvc()==='particulier'?'🏠 Commandes du service 001 — suivi par chantier':'🏗️ Commandes des gros chantiers — suivi par chantier')
+    :'🏗️ Suivi par chantier';
   const grouped={};
-  orders.forEach(o=>{
-    if(!grouped[o.chantier]) grouped[o.chantier]={orders:[],pending:0,done:0};
+  sortOrdersDesc(orders).forEach(o=>{
+    if(!grouped[o.chantier]) grouped[o.chantier]={orders:[],pending:0,done:0,svc:orderSvc(o)};
     grouped[o.chantier].orders.push(o);
     if(o.status==='pending') grouped[o.chantier].pending++;
     else grouped[o.chantier].done++;
   });
-  const sorted=Object.entries(grouped).sort((a,b)=>b[1].pending-a[1].pending);
-
+  // chantiers avec commandes en attente d'abord, puis le plus récent en premier
+  const sorted=Object.entries(grouped).sort(function(a,b){
+    return (b[1].pending-a[1].pending)||String(b[1].orders[0].createdAt||'').localeCompare(String(a[1].orders[0].createdAt||''));
+  });
+  const both=(currentRole==='admin'||currentRole==='comptable');
   el.innerHTML=`<h3 style="color:var(--blue);margin-bottom:16px;font-size:1rem">${title}</h3>`+
   sorted.map(([chantier,data])=>{
     const rows=data.orders.map(o=>`
       <div class="suivi-order-row">
         <div class="suivi-order-info">
-          <div><span class="suivi-order-id">${o.id}</span>${currentRole!=='chef'?' — '+o.chef:''} — ${o.date}</div>
+          <div><span class="suivi-order-id">${o.id}</span>${own?'':' — '+o.chef} — ${o.date}</div>
           <div class="suivi-total">${o.items.length} réf. · ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' · '+o.comment:''}</div>
           ${o.dateLivraison?`<div style="color:var(--green);font-size:0.78rem;font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
         </div>
@@ -6332,9 +6692,10 @@ function renderSuivi(){
           ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-done" style="padding:5px 10px;font-size:0.75rem" onclick="markDone('${o.id}')">✅</button>`:''}
         </div>
       </div>`).join('');
+    const svcTag=both?` <span style="font-size:0.7rem;font-weight:700;color:${data.svc==='particulier'?'#c0392b':'#2980b9'}">${data.svc==='particulier'?'🔴 001':'🔵 Gros chantier'}</span>`:'';
     return `<div class="suivi-chantier">
-      <div class="suivi-chantier-header" onclick="toggleSuivi('${chantier.replace(/'/g,"\'")}')">
-        <div class="suivi-chantier-title">🏗️ ${chantier}</div>
+      <div class="suivi-chantier-header" onclick="toggleSuivi('${chantier.replace(/'/g,"\\'")}')">
+        <div class="suivi-chantier-title">🏗️ ${chantier}${svcTag}</div>
         <div class="suivi-chantier-stats">
           ${data.pending>0?`<span class="suivi-badge suivi-badge-pending">⏳ ${data.pending} en attente</span>`:''}
           ${data.done>0?`<span class="suivi-badge suivi-badge-done">✅ ${data.done} traitée(s)</span>`:''}
@@ -6354,6 +6715,7 @@ function renderSuivi(){
     }
   });
 }
+
 function toggleSuivi(chantier){
   const id='suivi-'+chantier.replace(/\s/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
   const el=document.getElementById(id);
@@ -6717,12 +7079,13 @@ function openReceptionModal(fourn){
       +(isReliquat?'<span style="background:#fff3cd;color:#856404;font-size:0.65rem;padding:1px 6px;border-radius:8px;margin-left:4px;">RELIQUAT</span>':'')
       +'<br><span style="font-weight:600">'+a.nom+'</span><br>'
       +'<span style="color:var(--muted);font-size:0.72rem">Commandé: '+qtyCmd+'</span>'
+      +'<span id="split_'+i+'" style="display:block;color:var(--muted);font-size:0.7rem">'+splitText(splitReception(qtyCmd,reapproStockCache[code]))+'</span>'
       +'</div>'
       +'<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">'
       +'<label style="font-size:0.72rem;color:var(--muted)">Reçu</label>'
       +'<input type="number" id="rec_'+i+'" value="'+qtyCmd+'" min="0" data-code="'+code+'"'
       +' style="width:65px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-size:0.9rem;font-weight:700;background:var(--white);color:var(--text);"'
-      +' oninput="updateReliquatPreview('+i+','+qtyCmd+')">'
+      +' oninput="updateReliquatPreview('+i+','+qtyCmd+');updateSplitPreview('+i+')">'
       +'<span id="reliquat_'+i+'" style="font-size:0.7rem;color:var(--orange);font-weight:600;min-height:14px;"></span>'
       +'</div></div></div>';
   }).join('');
@@ -6746,9 +7109,10 @@ function confirmReception(){
     const qtyCommandee=a.qtyEnCommande||a.totalQty||0;
     const qtyReliquat=qtyCommandee-qtyRecu;
     if(qtyRecu>0){
-      const current=stockCache[code]||0;
-      batch.set(db.collection('stock').doc(code),{qty:current+qtyRecu,updatedAt:now});
-      stockCache[code]=(current+qtyRecu);
+      const sp=splitReception(qtyRecu,reapproStockCache[code]);   // réparti selon le besoin de chaque service
+      const curG=stockCache[code]||0, curP=stockCacheP[code]||0;
+      batch.set(db.collection('stock').doc(code),{qty:curG+sp.gros,qtyP:curP+sp.particulier,updatedAt:now},{merge:true});
+      stockCache[code]=curG+sp.gros; stockCacheP[code]=curP+sp.particulier;
       const fourn=a.fournisseur||pendingReceptionFourn||'';
       if(!receptionsParFourn[fourn]) receptionsParFourn[fourn]=[];
       receptionsParFourn[fourn].push({code,nom:a.nom,qtyRecu,qtyCommandee,qtyReliquat:Math.max(0,qtyReliquat),batigest:a.batigest||''});
@@ -7120,7 +7484,10 @@ function printOrder(id){
     <div style="font-size:1.5rem;font-weight:800">${o.id}</div><div style="color:#6b7a8d;font-size:0.85rem">${o.date}</div></div>
   </div>
   <div class="meta">
-    ${(()=>{const isP=o.user&&getAllUsers()[o.user]&&getAllUsers()[o.user].role==='particulier';return isP?`
+    ${(()=>{if(o.service){return `
+    <div><div class="ml">SERVICE</div><div class="mv">${SVC_LABEL[o.service]||o.service}</div></div>
+    <div><div class="ml">CHANTIER</div><div class="mv">${o.chantier}</div></div>
+    <div><div class="ml">DEMANDEUR</div><div class="mv">${o.chef}</div></div>`;}const isP=o.user&&getAllUsers()[o.user]&&getAllUsers()[o.user].role==='particulier';return isP?`
     <div><div class="ml">SERVICE</div><div class="mv">${o.chantier}</div></div>
     <div><div class="ml">DEMANDEUR</div><div class="mv">${o.user}</div></div>
     <div><div class="ml">NOM DU CHANTIER</div><div class="mv">${o.chef}</div></div>`:`
@@ -7147,15 +7514,48 @@ let invCat='Toutes';
 let invShowFaible=false;
 let invSeuilAlerte=5;
 let stockListener=null;
-let stockCache={};
+let stockCache={};     // stock GROS CHANTIER (bleu) : champ qty
+let stockCacheP={};    // stock PARTICULIER (rouge) : champ qtyP
+let invSvc='gros';      // stock affiché dans l'inventaire
 
+// ===== DEUX STOCKS : gros chantier (qty, bleu) et particulier (qtyP, rouge) =====
+function stockOf(code,svc){ return ((svc==='particulier'?stockCacheP:stockCache)[code])||0; }
+function stockField(svc){ return svc==='particulier'?'qtyP':'qty'; }
+function svcIcon(svc){ return svc==='particulier'?'🔴':'🔵'; }
+function stockBadgesHtml(code){
+  const g=stockCache[code], p=stockCacheP[code];
+  if(g===undefined&&p===undefined) return '';
+  const part=function(icon,q){
+    const n=q||0, c=n===0?'var(--red)':(n<=invSeuilAlerte?'var(--orange)':'var(--green)');
+    return '<span style="color:'+c+'">'+icon+' '+n+'</span>';
+  };
+  return '<div style="font-size:0.7rem;font-weight:600;margin-bottom:4px">'+part('🔵',g)+' · '+part('🔴',p)+'</div>';
+}
+// part de chaque service dans le besoin de réappro (anciennes lignes sans détail : tout au gros chantier)
+function reapproServices(ex){
+  if(!ex) return {gros:0,particulier:0};
+  if(!ex.services) return {gros:ex.totalQty||0,particulier:0};
+  return {gros:ex.services.gros||0,particulier:ex.services.particulier||0};
+}
+// répartition d'une quantité reçue du fournisseur entre les deux stocks, proportionnelle au besoin de chaque service
+function splitReception(q,ex){
+  q=q>0?q:0;
+  const s=reapproServices(ex), tot=s.gros+s.particulier;
+  if(!(tot>0)||!q) return {gros:q,particulier:0};
+  const p=Math.min(q,Math.round(q*s.particulier/tot));
+  return {gros:q-p,particulier:p};
+}
+function splitText(sp){
+  const t=(sp.gros?'🔵 '+sp.gros:'')+(sp.gros&&sp.particulier?' · ':'')+(sp.particulier?'🔴 '+sp.particulier:'');
+  return 'Stock crédité : '+(t||'—');
+}
 function getStock(){return stockCache;}
 
 function listenStock(){
   if(stockListener) stockListener();
   stockListener=db.collection('stock').onSnapshot(snap=>{
-    stockCache={};
-    snap.docs.forEach(d=>{stockCache[d.id]=d.data().qty||0;});
+    stockCache={}; stockCacheP={};
+    snap.docs.forEach(d=>{const x=d.data(); stockCache[d.id]=x.qty||0; stockCacheP[d.id]=x.qtyP||0;});
     // Refresh inventaire if open
     if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
     // Refresh catalogue to update badges
@@ -7170,88 +7570,75 @@ function deductStockFromOrder(order){
     const current=stockCache[item.code]||0;
     if(current>0){
       const newQty=Math.max(0,current-item.qty);
-      batch.set(db.collection('stock').doc(item.code),{qty:newQty,updatedAt:new Date().toISOString()});
+      batch.set(db.collection('stock').doc(item.code),{qty:newQty,updatedAt:new Date().toISOString()},{merge:true});
     }
   });
   batch.commit().catch(()=>{});
 }
 
-function saveStockItem(code, qty){
-  return db.collection('stock').doc(code).set({qty:parseInt(qty)||0,updatedAt:new Date().toISOString()});
+function saveStockItem(code, qty, svc){
+  // merge : ne touche que le stock du service concerné (l'autre stock est conservé)
+  return db.collection('stock').doc(code).set({[stockField(svc||'gros')]:parseInt(qty)||0,updatedAt:new Date().toISOString()},{merge:true});
 }
 
 function renderInventaireBody(){
-  // Only re-render the table body without touching the search input
+  const tbody=document.getElementById('invTableBody');
+  if(!tbody) return;
+  const countEl=document.getElementById('invCount');
+  const filtered=invFilteredItems();
+  if(countEl) countEl.textContent=filtered.length+' article(s)';
+  tbody.innerHTML=filtered.map(invRowHtml).join('');
+}
+
+function setInvSvc(svc){ invSvc=svc==='particulier'?'particulier':'gros'; renderInventaire(); }
+function invFilteredItems(){
   const allItems=[...CATALOGUE,...customRefsCache];
-  let filtered=allItems.filter(p=>{
+  return allItems.filter(p=>{
     const matchCat=invCat==='Toutes'||p.cat===invCat;
-    const matchSearch=!invFilter||p.code.toLowerCase().includes(invFilter)||p.nom.toLowerCase().includes(invFilter.toLowerCase());
-    const qty=stockCache[p.code]||0;
+    const matchSearch=!invFilter||normTxt(p.code).includes(normTxt(invFilter))||normTxt(getEffectiveName(p.code,p.nom)).includes(normTxt(invFilter));
+    const qty=stockOf(p.code,invSvc);
     const matchFaible=!invShowFaible||(qty>0&&qty<=invSeuilAlerte);
     return matchCat&&matchSearch&&matchFaible;
   });
-  const tbody=document.getElementById('invTableBody');
-  const countEl=document.getElementById('invCount');
-  if(!tbody) return;
-  // Update stats
-  const enStock=allItems.filter(p=>(stockCache[p.code]||0)>invSeuilAlerte).length;
-  const alertes=allItems.filter(p=>{const q=stockCache[p.code]||0;return q>0&&q<=invSeuilAlerte;}).length;
-  const ruptures=allItems.filter(p=>(stockCache[p.code]||0)===0).length;
-  if(countEl) countEl.textContent=filtered.length+' article(s)';
-  tbody.innerHTML=filtered.map(p=>{
-    const qty=stockCache[p.code]||0;
-    const badge=qty===0
-      ?'<span class="stock-zero">❌ 0</span>'
-      :qty<=invSeuilAlerte
-        ?'<span class="stock-low">⚠️ '+qty+'</span>'
-        :'<span class="stock-ok">✅ '+qty+'</span>';
-    const isCustom=customRefsCache.some(r=>r.code===p.code);
-    return '<tr>'
-      +'<td style="font-size:0.75rem;color:var(--muted)">'+p.code+(isCustom?' <span style="background:#e3f2fd;color:var(--blue);font-size:0.65rem;padding:1px 5px;border-radius:8px">✏️</span>':'')+'</td>'
-      +'<td>'+p.nom+'</td>'
-      +'<td style="font-size:0.75rem">'+p.cat+'</td>'
-      +'<td style="text-align:center"><input class="inv-qty-input" type="number" min="0" value="'+qty+'" onchange="saveAndRefreshStock(this,\'' +p.code+ '\')" onblur="this.style.borderColor=\'\'"></td>'
-      +'<td style="text-align:right;font-size:0.82rem">'+(()=>{const r=REFS_FOURN[p.code];return r&&r.prix?parseFloat(r.prix).toFixed(2)+' €':'-';})()+'</td>'
-      +'<td style="text-align:center">'+badge+'</td>'
-      +'<td style="text-align:center;white-space:nowrap">'
-      +'<button onclick="openPrixModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>'
-      +(isCustom?'<button onclick="openCustomRefModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button><button onclick="deleteCustomRef(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>':'')
-      +'</td></tr>';
-  }).join('');
 }
-
+function invRowHtml(p){
+  const qty=stockOf(p.code,invSvc), other=stockOf(p.code,invSvc==='gros'?'particulier':'gros');
+  const badge=qty>invSeuilAlerte?'<span class="stock-badge stock-ok">✅ '+qty+'</span>':qty>0?'<span class="stock-badge stock-low">⚠️ '+qty+'</span>':'<span class="stock-badge stock-zero">❌ 0</span>';
+  const isCustom=customRefsCache.some(r=>r.code===p.code);
+  const r=REFS_FOURN[p.code], prix=r&&r.prix?parseFloat(r.prix).toFixed(2)+' €':'-';
+  const col=invSvc==='particulier'?'#e74c3c':'#0077b6';
+  return '<tr>'
+    +'<td style="font-size:0.75rem;color:var(--muted)">'+p.code+(isCustom?' <span style="background:#e3f2fd;color:var(--blue);font-size:0.65rem;padding:1px 5px;border-radius:8px">✏️</span>':'')+'</td>'
+    +'<td>'+editEsc(getEffectiveName(p.code,p.nom))+'</td>'
+    +'<td style="font-size:0.75rem">'+p.cat+'</td>'
+    +'<td style="text-align:center"><input class="inv-qty-input" type="number" min="0" value="'+qty+'" style="border-color:'+col+'" onchange="saveAndRefreshStock(this,\''+p.code+'\')" onblur="this.style.borderColor=\''+col+'\'"></td>'
+    +'<td style="text-align:center;font-size:0.78rem;color:var(--muted);white-space:nowrap">'+svcIcon(invSvc==='gros'?'particulier':'gros')+' '+other+'</td>'
+    +'<td style="text-align:right;font-size:0.82rem">'+prix+'</td>'
+    +'<td style="text-align:center">'+badge+'</td>'
+    +'<td style="text-align:center;white-space:nowrap">'
+    +'<button onclick="openPrixModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>'
+    +(isCustom?'<button onclick="openCustomRefModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button><button onclick="deleteCustomRef(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>':'')
+    +'</td></tr>';
+}
 function renderInventaire(){
   const el=document.getElementById('inventaireContent');
   const cats=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
   const allItems=[...CATALOGUE,...customRefsCache];
-  let filtered=allItems.filter(p=>{
-    const matchCat=invCat==='Toutes'||p.cat===invCat;
-    const matchSearch=!invFilter||normTxt(p.code).includes(normTxt(invFilter))||normTxt(getEffectiveName(p.code,p.nom)).includes(normTxt(invFilter));
-    const qty=stockCache[p.code]||0;
-    const matchFaible=!invShowFaible||(qty>0&&qty<=invSeuilAlerte);
-    return matchCat&&matchSearch&&matchFaible;
-  });
-  // Reset faible filter after use (so normal search still works)
-
-  // Stats
-  const stockArticles=Object.keys(stockCache).length;
-  const alertes=CATALOGUE.filter(p=>{const q=stockCache[p.code]||0;return q>0&&q<=invSeuilAlerte;}).length;
-  const ruptures=CATALOGUE.filter(p=>!stockCache[p.code]||stockCache[p.code]===0).length;
-  const enStock=CATALOGUE.filter(p=>stockCache[p.code]>invSeuilAlerte).length;
-
-  // Valeur totale du stock
+  const filtered=invFilteredItems();
+  const S=function(code){return stockOf(code,invSvc);};
+  const alertes=allItems.filter(p=>{const q=S(p.code);return q>0&&q<=invSeuilAlerte;}).length;
+  const ruptures=allItems.filter(p=>S(p.code)===0).length;
+  const enStock=allItems.filter(p=>S(p.code)>invSeuilAlerte).length;
   let valeurStock=0;
-  [...CATALOGUE,...customRefsCache].forEach(p=>{
-    const qty=stockCache[p.code]||0;
-    if(qty>0){
-      const ref=REFS_FOURN[p.code];
-      const prix=ref?parseFloat(ref.prix)||0:0;
-      valeurStock+=qty*prix;
-    }
-  });
+  allItems.forEach(p=>{const qty=S(p.code);if(qty>0){const ref=REFS_FOURN[p.code];valeurStock+=qty*(ref?parseFloat(ref.prix)||0:0);}});
   const valeurStr=valeurStock>0?valeurStock.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €':'—';
-
+  const tg='padding:10px 16px;border-radius:10px;font-size:0.88rem;font-weight:800;cursor:pointer;border:2px solid ';
+  const gOn=invSvc==='gros', pOn=invSvc==='particulier';
   el.innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button onclick="setInvSvc('gros')" style="${tg}#0077b6;${gOn?'background:#0077b6;color:#fff':'background:var(--white);color:#0077b6'}">🔵 Stock gros chantier</button>
+      <button onclick="setInvSvc('particulier')" style="${tg}#e74c3c;${pOn?'background:#e74c3c;color:#fff':'background:var(--white);color:#e74c3c'}">🔴 Stock particulier</button>
+    </div>
     <div class="inv-stats">
       <div class="stat-card"><div class="stat-num" style="color:var(--green)">${enStock}</div><div class="stat-label">En stock</div></div>
       <div class="stat-card" onclick="showStockFaible()" style="cursor:pointer;transition:transform 0.15s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"><div class="stat-num" style="color:var(--orange)">${alertes}</div><div class="stat-label">Stock faible 🔍</div></div>
@@ -7259,7 +7646,7 @@ function renderInventaire(){
       <div class="stat-card"><div class="stat-num" style="color:#8e44ad;font-size:1.1rem">${valeurStr}</div><div class="stat-label">Valeur stock HT</div></div>
     </div>
     <div class="inv-toolbar">
-      <input class="inv-search" type="text" placeholder="🔍 Rechercher..." value="${invFilter}" id="invSearch" oninput="invFilter=this.value;invShowFaible=false;this.placeholder='Rechercher...';this.style.borderColor='';renderInventaireBody()">
+      <input class="inv-search" type="text" placeholder="🔍 Rechercher..." value="${editEsc(invFilter)}" id="invSearch" oninput="invFilter=this.value;invShowFaible=false;this.placeholder='Rechercher...';this.style.borderColor='';renderInventaireBody()">
       <select class="inv-cat-select" onchange="invCat=this.value;renderInventaireBody()">
         ${cats.map(c=>`<option value="${c}" ${c===invCat?'selected':''}>${c}</option>`).join('')}
       </select>
@@ -7268,10 +7655,9 @@ function renderInventaire(){
       </div>
       <button onclick="exportStockExcel()" style="padding:8px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📥 Export stock</button>
       ${currentRole==='admin'?`
-
-      <label style="padding:8px 14px;background:#1abc9c;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
-        📦 Importer stock GC
-        <input type="file" accept=".xlsx" style="display:none" onchange="importStockGC(event)">
+      <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
+        🔄 Synchroniser depuis Excel
+        <input type="file" accept=".xlsx" style="display:none" onchange="excelSyncStart(event)">
       </label>
       <button onclick="resetStock()" style="padding:8px 14px;background:#e74c3c;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">🗑️ Réinitialiser</button>
       <label style="padding:8px 14px;background:#8e44ad;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
@@ -7279,41 +7665,13 @@ function renderInventaire(){
         <input type="file" accept=".json" style="display:none" onchange="loadRefsFromJSON(event)">
       </label>`:''}
       <button onclick="openCustomRefModal()" style="padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">➕ Nouvelle référence</button>
-      <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
-        🔄 Maj prix/fournisseurs
-        <input type="file" accept=".xlsx" style="display:none" onchange="importRefsFourn(event)">
-      </label>
     </div>
     <div style="overflow-x:auto">
       <table class="inv-table">
         <thead><tr>
-          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock</th><th style="text-align:right">Prix U.</th><th style="text-align:center">État</th><th></th>
+          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock ${svcIcon(invSvc)}</th><th style="text-align:center">Autre stock</th><th style="text-align:right">Prix U.</th><th style="text-align:center">État</th><th></th>
         </tr></thead>
-        <tbody id="invTableBody">
-          ${filtered.map(p=>{
-            const qty=stockCache[p.code]||0;
-            const etat=qty>invSeuilAlerte?'ok':qty>0?'low':'zero';
-            const badge=etat==='ok'?`<span class="stock-badge stock-ok">✅ ${qty}</span>`:etat==='low'?`<span class="stock-badge stock-low">⚠️ ${qty}</span>`:`<span class="stock-badge stock-zero">❌ 0</span>`;
-            const isCustom=customRefsCache.some(r=>r.code===p.code);
-            return `<tr>
-              <td style="font-size:0.75rem;color:var(--muted)">${p.code}${isCustom?' <span style="background:#e3f2fd;color:var(--blue);font-size:0.65rem;padding:1px 5px;border-radius:8px">✏️</span>':''}</td>
-              <td>${getEffectiveName(p.code,p.nom)}</td>
-              <td style="font-size:0.75rem">${p.cat}</td>
-              <td style="text-align:center">
-                <input class="inv-qty-input" type="number" min="0" value="${qty}" 
-                  onchange="saveStockItem('${p.code}',this.value).then(()=>showToast('Stock mis à jour ✅')).catch(()=>showToast('Erreur'))"
-                  onblur="this.style.borderColor=''">
-              </td>
-              <td style="text-align:right;font-size:0.82rem">${(()=>{const r=REFS_FOURN[p.code];return r&&r.prix?parseFloat(r.prix).toFixed(2)+' €':'-';})()}</td>
-              <td style="text-align:center">${badge}</td>
-              <td style="text-align:center;white-space:nowrap">
-                <button onclick="openPrixModal('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>
-                ${isCustom?`<button onclick="openCustomRefModal('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button>
-                <button onclick="deleteCustomRef('${p.code}')" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>`:''}
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
+        <tbody id="invTableBody">${filtered.map(invRowHtml).join('')}</tbody>
       </table>
     </div>`;
 }
@@ -7427,20 +7785,19 @@ function deleteCustomRef(code){
 
 function exportStockExcel(){
   const wb=XLSX.utils.book_new();
-  const data=[['Code','Désignation','Catégorie','Stock','État']];
-  CATALOGUE.forEach(p=>{
-    const qty=stockCache[p.code]||0;
-    const etat=qty>invSeuilAlerte?'OK':qty>0?'Stock faible':'Rupture';
-    data.push([p.code,p.nom,p.cat,qty,etat]);
+  const data=[['Code','Désignation','Catégorie','Stock gros chantier (bleu)','Stock particulier (rouge)','État gros chantier','État particulier']];
+  const etat=function(q){return q>invSeuilAlerte?'OK':q>0?'Stock faible':'Rupture';};
+  [...CATALOGUE,...customRefsCache].forEach(p=>{
+    const g=stockOf(p.code,'gros'), pa=stockOf(p.code,'particulier');
+    data.push([p.code,getEffectiveName(p.code,p.nom),p.cat,g,pa,etat(g),etat(pa)]);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:15},{wch:50},{wch:20},{wch:10},{wch:15}];
+  ws['!cols']=[{wch:15},{wch:50},{wch:20},{wch:14},{wch:14},{wch:15},{wch:15}];
   XLSX.utils.book_append_sheet(wb,ws,'Inventaire');
   XLSX.writeFile(wb,`Inventaire_DELAMOTTE_${new Date().toLocaleDateString('fr-FR').replace(/\//g,'-')}.xlsx`);
   showToast('Export inventaire téléchargé ✅');
 }
 
-// Charger REFS_FOURN depuis Firebase au démarrage
 function loadRefsFournFromFirebase(){
   return db.collection('config').doc('refs_fourn').get().then(doc=>{
     if(doc.exists){
@@ -7770,7 +8127,7 @@ function importStockGC(event){
       var now=new Date().toISOString();
       function writeBatch(i){
         var batch=db.batch();
-        entries.slice(i,i+400).forEach(function(x){batch.set(db.collection('stock').doc(x[0]),{qty:x[1],updatedAt:now});});
+        entries.slice(i,i+400).forEach(function(x){batch.set(db.collection('stock').doc(x[0]),{qty:x[1],updatedAt:now},{merge:true});});
         return batch.commit().then(function(){return entries.length>i+400?writeBatch(i+400):null;});
       }
       showToast('Enregistrement Firebase...');
@@ -7785,7 +8142,7 @@ function importStockGC(event){
 }
 
 function resetStock(){
-  if(!confirm('Réinitialiser TOUT le stock à 0 ?\nCette action est irréversible.'))return;
+  if(!confirm('Réinitialiser TOUT le stock à 0 (gros chantier ET particulier) ?\nCette action est irréversible.'))return;
   db.collection('stock').get().then(function(snap){
     var batch=db.batch();var count=0;
     snap.docs.forEach(function(doc){
@@ -7794,7 +8151,7 @@ function resetStock(){
     });
     return batch.commit().then(function(){return count;});
   }).then(function(count){
-    stockCache={};
+    stockCache={}; stockCacheP={};
     showToast('✅ Stock réinitialisé ('+count+' articles)');
     renderInventaire();
   }).catch(function(){showToast('❌ Erreur Firebase');});
@@ -7811,6 +8168,11 @@ function updateReliquatPreview(i,qtyCmd){
   else preview.textContent='✅ Complet';
 }
 
+function updateSplitPreview(i){
+  var input=document.getElementById('rec_'+i), span=document.getElementById('split_'+i);
+  if(!input||!span) return;
+  span.textContent=splitText(splitReception(parseInt(input.value)||0,reapproStockCache[input.dataset.code]));
+}
 var prixModalCode=null;
 
 function openPrixModal(code){
@@ -7902,7 +8264,7 @@ function showStockFaible(){
 }
 
 function saveAndRefreshStock(input, code){
-  saveStockItem(code, input.value)
+  saveStockItem(code, input.value, invSvc)
     .then(()=>showToast('Stock mis à jour ✅'))
     .catch(()=>showToast('Erreur'));
 }
