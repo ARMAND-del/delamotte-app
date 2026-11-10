@@ -133,7 +133,11 @@ const db = firebase.firestore();
   }
   .chantier-picker{position:relative;width:100%;}
   .chantier-picker input{width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;}
-  .picker-list{max-height:230px;overflow-y:auto;background:var(--white);border:2px solid var(--border);border-radius:8px;margin-top:4px;}
+  .retour-mode .cart-btn{background:#d35400;}
+  .picker-field{position:relative;}
+  .picker-field input{padding-right:42px;}
+  .picker-arrow{position:absolute;right:0;top:0;bottom:0;width:40px;border:none;background:none;cursor:pointer;color:var(--muted);font-size:0.8rem;}
+  .picker-list{max-height:260px;overflow-y:auto;background:var(--white);border:2px solid var(--border);border-radius:8px;margin-top:4px;}
   .picker-item{padding:11px 12px;font-size:0.88rem;cursor:pointer;border-bottom:1px solid var(--border);overflow-wrap:anywhere;}
   .picker-item:hover{background:var(--blue-light);}
   .picker-empty{padding:11px 12px;font-size:0.82rem;color:var(--muted);}
@@ -373,7 +377,8 @@ const db = firebase.firestore();
   </div>
   <div class="main">
     <div id="tabCatalogue">
-      <div id="adminDashboard" style="display:none">
+      <div id="retourBanner" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;align-items:center;gap:8px;flex-wrap:wrap;"><b style="flex:1;min-width:150px;font-size:0.88rem">↩️ Bon de retour en cours : <span id="retourBannerCount">0</span> article(s)</b><button onclick="openRetourForm()" style="padding:8px 12px;background:#fff;color:#e67e22;border:none;border-radius:8px;font-size:0.82rem;font-weight:800;cursor:pointer;">✅ Finaliser le bon</button><button onclick="exitRetourMode()" style="padding:8px 12px;background:rgba(255,255,255,0.25);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">Quitter</button></div>
+    <div id="adminDashboard" style="display:none">
         <div class="dashboard">
           <h3>📊 Tableau de bord — Aujourd'hui</h3>
           <div class="dashboard-grid" id="dashboardGrid"></div>
@@ -418,7 +423,7 @@ const db = firebase.firestore();
             <option value="atelier">Atelier</option>
             <option value="admin">Admin (accès total)</option>
           </select>
-          <select id="newUserService" onchange="updatePermissionsFromRole()" style="display:none"><option value="gros">🔵 Gros chantier</option><option value="particulier">🔴 001 Particulier</option></select>
+          <select id="newUserService" onchange="updatePermissionsFromRole()" style="display:none"><option value="gros">🔵 Gros chantier</option><option value="particulier">🔴 001 Particulier</option><option value="both">🔵🔴 Les 2 services</option></select>
         <input type="hidden" id="editUserOrigName">
         </div>
         <div style="background:var(--blue-light);border-radius:10px;padding:12px;margin:10px 0;">
@@ -526,10 +531,10 @@ const db = firebase.firestore();
       <h3 style="color:#e67e22;font-size:1rem;">↩️ Nouveau bon de retour</h3>
       <button onclick="closeRetourModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
-    <p style="font-size:0.8rem;color:var(--muted);">Matériel rendu au magasin. Le stock ne bouge qu'après réception par le magasin.</p>
+    <p style="font-size:0.8rem;color:var(--muted);">Matériel rendu au magasin. Le stock ne bouge qu'une fois le bon traité par le magasin.</p>
     <div id="retChantierBlock"><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Chantier *</label>
       <div class="chantier-picker">
-        <div id="retPickerSearchWrap"><input type="text" id="retPickerInput" placeholder="🔍 Rechercher et choisir un chantier" oninput="pickerSearch('ret')" onfocus="pickerSearch('ret')" autocomplete="off"><div id="retPickerList" class="picker-list" style="display:none"></div></div>
+        <div id="retPickerSearchWrap"><div class="picker-field"><input type="text" id="retPickerInput" placeholder="Choisir ou taper un chantier *" oninput="pickerSearch('ret')" onfocus="pickerSearch('ret')" onkeydown="pickerKey(event,'ret')" autocomplete="off"><button type="button" class="picker-arrow" onclick="pickerToggle('ret')" aria-label="Ouvrir la liste">▼</button></div><div id="retPickerList" class="picker-list" style="display:none"></div></div>
         <div id="retPickerChosen" class="picker-chosen" style="display:none"></div>
       </div>
       <select id="retChantierSel" style="display:none"></select></div>
@@ -537,6 +542,7 @@ const db = firebase.firestore();
     <div><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Motif</label><select id="retMotif" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></select></div>
     <div><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Commentaire (optionnel)</label><textarea id="retComment" rows="2" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></textarea></div>
     <div style="font-weight:700;margin:14px 0 4px;color:var(--text);">Articles rendus</div>
+    <button id="retContinue" onclick="closeRetourModal();showTab('catalogue');setBnav('catalogue')" style="display:none;width:100%;padding:10px;margin-bottom:6px;background:var(--blue-light);color:var(--blue);border:2px solid var(--blue);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">➕ Continuer à choisir dans le catalogue</button>
     <div id="retItems"></div>
     <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
       <input type="text" id="retAddSearch" placeholder="➕ Ajouter un article (code ou nom)" oninput="retourSearch()" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;">
@@ -757,7 +763,7 @@ const db = firebase.firestore();
       <!-- Champs normaux (cachés pour particulier) -->
       <div class="chantier-picker">
         <div id="cartPickerSearchWrap">
-          <input type="text" id="cartPickerInput" placeholder="🔍 Rechercher et choisir un chantier *" oninput="pickerSearch('cart')" onfocus="pickerSearch('cart')" autocomplete="off">
+          <div class="picker-field"><input type="text" id="cartPickerInput" placeholder="Choisir ou taper un chantier *" oninput="pickerSearch('cart')" onfocus="pickerSearch('cart')" onkeydown="pickerKey(event,'cart')" autocomplete="off"><button type="button" class="picker-arrow" onclick="pickerToggle('cart')" aria-label="Ouvrir la liste">▼</button></div>
           <div id="cartPickerList" class="picker-list" style="display:none"></div>
         </div>
         <div id="cartPickerChosen" class="picker-chosen" style="display:none"></div>
@@ -4858,6 +4864,7 @@ function doLogin(){
   }
 }
 function startSession(u){
+  resetRetourMode();
   currentUser=u;currentRole=USERS[u].role;
   localStorage.setItem('delamotte_session', u);
   document.getElementById('loginScreen').style.display='none';
@@ -4954,6 +4961,16 @@ const DLM_ROLES=['atelier','conducteur','admin'];
 const SVC_LABEL={gros:'Gros chantier',particulier:'001 Particulier'};
 function userSvc(u){ if(!u) return 'gros'; if(u.role==='particulier') return 'particulier'; return u.service==='particulier'?'particulier':'gros'; }
 function mySvc(){ return userSvc(getAllUsers()[currentUser]); }
+// réglage du service d'un utilisateur : 'gros', 'particulier' ou 'both' (accès aux 2 services)
+function userSvcValue(u){
+  if(!u) return 'gros';
+  if(u.service==='both') return 'both';
+  if(u.role==='particulier') return 'particulier';
+  return u.service==='particulier'?'particulier':'gros';
+}
+function svcsOf(u){ const v=userSvcValue(u); return v==='both'?['gros','particulier']:[v]; }
+function mySvcs(){ return svcsOf(getAllUsers()[currentUser]); }
+function isMultiSvc(){ return currentRole==='admin'||mySvcs().length>1; }
 function chantierSvc(c){ return c&&c.service==='particulier'?'particulier':'gros'; }
 function chantierSvcByName(name){ return chantierSvc(getChantiersFull().find(function(x){return x.name===name;})); }
 // service d'une commande : champ enregistré, sinon déduit (anciennes commandes)
@@ -4967,22 +4984,26 @@ function retourSvc(r){ return r.service?r.service:(r.nomChantier?'particulier':'
 function getPermissions(userData){
   const role=userData.role;
   const base=Object.assign({},ROLE_DEFAULTS[role]||ROLE_DEFAULTS.chef);
-  if(role==='conducteur'&&userSvc(userData)==='particulier') base.chantiers=true;   // le conducteur du service particulier gère ses chantiers
+  const gerePart=(role==='conducteur'&&svcsOf(userData).indexOf('particulier')!==-1);
+  if(gerePart) base.chantiers=true;   // le conducteur du service particulier gère ses chantiers
   // les clés absentes du profil enregistré (ex. dlm, chantiers) prennent la valeur par défaut du rôle
   const perms=Object.assign({},base,userData.permissions||{});
   if(role==='admin') ALL_PERMS.forEach(function(p){perms[p]=true;});
   perms.dlm=!!perms.dlm&&DLM_ROLES.indexOf(role)!==-1;
   // la gestion des chantiers du service particulier : admin et conducteur de ce service uniquement
-  if(role!=='admin'&&!(role==='conducteur'&&userSvc(userData)==='particulier')) perms.chantiers=false;
+  if(role!=='admin'&&!gerePart) perms.chantiers=false;
   return perms;
 }
 
 function updatePermissionsFromRole(){
   const role=document.getElementById('newUserRole').value;
   const svcBlock=document.getElementById('newUserService');
-  const hasSvc=(role==='chef'||role==='conducteur'||role==='atelier');
-  if(svcBlock) svcBlock.style.display=hasSvc?'':'none';
-  const svc=(role==='particulier')?'particulier':(hasSvc&&svcBlock?svcBlock.value:'gros');
+  const hasSvc=(role==='chef'||role==='conducteur'||role==='atelier'||role==='particulier');
+  if(svcBlock){
+    svcBlock.style.display=hasSvc?'':'none';
+    if(role==='particulier'&&svcBlock.value==='gros') svcBlock.value='particulier';
+  }
+  const svc=hasSvc&&svcBlock?svcBlock.value:'gros';
   const defaults=getPermissions({role:role,service:svc});
   ALL_PERMS.forEach(p=>{
     const el=document.getElementById('perm_'+p);
@@ -5009,7 +5030,7 @@ function renderUsers(){
     const isAdmin=name==='Magasin';
     const perms=getPermissions(data);
     const permIcons=ALL_PERMS.filter(p=>perms[p]).map(p=>ICONS[p]).join(' ');
-    const svcTag=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier'||data.role==='particulier')?' · '+(userSvc(data)==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier'):'';
+    const svcTag=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier'||data.role==='particulier')?' · '+(userSvcValue(data)==='both'?'🔵🔴 Les 2 services':(userSvcValue(data)==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')):'';
     const roleLabel=(data.role==='admin'?'🔑 Admin':data.role==='conducteur'?'🦺 Conducteur':data.role==='comptable'?'📊 Comptable':data.role==='particulier'?'🏠 Particulier':data.role==='atelier'?'🛠️ Atelier':'👷 Chef')+svcTag;
     return `<div class="user-mgmt-card">
       <div class="user-mgmt-info">
@@ -5034,8 +5055,10 @@ function saveUser(){
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);permissions[p]=el?el.checked:false;});
   if(role==='admin') ALL_PERMS.forEach(p=>permissions[p]=true);
   const userData={pass,role,permissions};
-  if(role==='particulier') userData.service='particulier';
-  else if(role==='chef'||role==='conducteur'||role==='atelier') userData.service=document.getElementById('newUserService').value==='particulier'?'particulier':'gros';
+  if(role==='chef'||role==='conducteur'||role==='atelier'||role==='particulier'){
+    const v=document.getElementById('newUserService').value;
+    userData.service=v==='both'?'both':(role==='particulier'?'particulier':(v==='particulier'?'particulier':'gros'));
+  }
   const saves=[];
   if(origName && origName!==name){
     saves.push(db.collection('users').doc(origName).delete());
@@ -5054,9 +5077,9 @@ function editUser(name){
   document.getElementById('newUserName').value=name;
   document.getElementById('newUserPass').value=data.pass;
   document.getElementById('newUserRole').value=data.role;
-  const sv=document.getElementById('newUserService'); if(sv) sv.value=userSvc(data);
+  const sv=document.getElementById('newUserService'); if(sv) sv.value=userSvcValue(data);
   document.getElementById('editUserOrigName').value=name;
-  const hasSvc=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier');
+  const hasSvc=(data.role==='chef'||data.role==='conducteur'||data.role==='atelier'||data.role==='particulier');
   if(sv) sv.style.display=hasSvc?'':'none';
   const perms=getPermissions(data);
   ALL_PERMS.forEach(p=>{const el=document.getElementById('perm_'+p);if(el){el.checked=!!perms[p];el.disabled=data.role==='admin';}});
@@ -5176,12 +5199,13 @@ function saveEditChantier(){
 }
 // ===== CHANTIERS PAR SERVICE : liste autorisée + sélecteur avec recherche =====
 function pickerList(){
-  const svc=mySvc();
+  const svcs=mySvcs();
   return getChantiersFull()
-    .filter(function(c){return currentRole==='admin'||chantierSvc(c)===svc;})
+    .filter(function(c){return currentRole==='admin'||svcs.indexOf(chantierSvc(c))!==-1;})
     .map(function(c){return {name:c.name,service:chantierSvc(c)};})
     .sort(function(a,b){return a.name.localeCompare(b.name,'fr',{numeric:true});});
 }
+
 function pickerIds(ctx){
   return ctx==='cart'
     ?{sel:'cartChantier',inp:'cartPickerInput',list:'cartPickerList',box:'cartPickerChosen',wrap:'cartPickerSearchWrap'}
@@ -5203,7 +5227,7 @@ function pickerSync(ctx){
   const I=pickerIds(ctx), sel=document.getElementById(I.sel); if(!sel) return;
   const val=sel.value, box=document.getElementById(I.box), wrap=document.getElementById(I.wrap), lst=document.getElementById(I.list);
   if(val){
-    const tag=currentRole==='admin'?(chantierSvcByName(val)==='particulier'?' · 001':' · gros chantier'):'';
+    const tag=isMultiSvc()?(chantierSvcByName(val)==='particulier'?' · 001':' · gros chantier'):'';
     box.innerHTML='<span style="flex:1;min-width:0;overflow-wrap:anywhere">✅ <b>'+editEsc(val)+'</b>'+tag+'</span><button type="button" onclick="pickerClear(\''+ctx+'\')">Changer</button>';
     box.style.display='flex'; wrap.style.display='none'; lst.style.display='none';
   }else{ box.style.display='none'; wrap.style.display=''; }
@@ -5214,13 +5238,29 @@ function pickerSearch(ctx){
   const words=normTxt(inp.value).split(/\s+/).filter(Boolean), all=pickerList();
   if(!all.length){lst.innerHTML='<div class="picker-empty">Aucun chantier disponible pour ton service. Demande à l\'admin ou au conducteur d\'en ajouter.</div>';lst.style.display='block';return;}
   const res=all.filter(function(c){const t=normTxt(c.name);return words.every(function(w){return t.indexOf(w)!==-1;});});
-  const shown=res.slice(0,40);
-  lst.innerHTML=shown.length?shown.map(function(c){
-    const tag=currentRole==='admin'?'<span style="color:var(--muted);font-size:0.72rem"> · '+(c.service==='particulier'?'001':'gros chantier')+'</span>':'';
+  const shown=res.slice(0,400), multi=isMultiSvc();
+  lst.innerHTML=(shown.length?shown.map(function(c){
+    const tag=multi?'<span style="color:var(--muted);font-size:0.72rem"> · '+(c.service==='particulier'?'001':'gros chantier')+'</span>':'';
     return '<div class="picker-item" data-name="'+editEsc(c.name)+'" onclick="pickerChoose(\''+ctx+'\',this.dataset.name)">'+editEsc(c.name)+tag+'</div>';
-  }).join('')+(res.length>shown.length?'<div class="picker-empty">+ '+(res.length-shown.length)+' autres : précise ta recherche</div>':''):'<div class="picker-empty">Aucun chantier trouvé</div>';
+  }).join(''):'<div class="picker-empty">Aucun chantier ne contient « '+editEsc(inp.value)+' »</div>')
+    +(res.length>shown.length?'<div class="picker-empty">+ '+(res.length-shown.length)+' autres : précise ta recherche</div>':'');
   lst.style.display='block';
 }
+function pickerToggle(ctx){
+  const I=pickerIds(ctx), lst=document.getElementById(I.list);
+  if(lst.style.display==='block'){lst.style.display='none';return;}
+  pickerSearch(ctx);
+}
+// Entrée : choisit le premier chantier de la liste filtrée ; Échap : ferme la liste
+function pickerKey(e,ctx){
+  const I=pickerIds(ctx), lst=document.getElementById(I.list);
+  if(e.key==='Escape'){lst.style.display='none';return;}
+  if(e.key==='Enter'){
+    const first=lst.querySelector('.picker-item');
+    if(first){e.preventDefault();pickerChoose(ctx,first.dataset.name);}
+  }
+}
+
 function pickerChoose(ctx,name){
   if(!pickerList().some(function(c){return c.name===name;})) return;
   const I=pickerIds(ctx); document.getElementById(I.inp).value='';
@@ -5242,12 +5282,13 @@ function updateChantierSelect(){ pickerSetOptions('cart'); }
 function updateCartServiceUI(){
   const badge=document.getElementById('cartServiceBadge'); if(!badge) return;
   const sel=document.getElementById('cartChantier'), name=sel?sel.value:'';
-  const svc=currentRole==='admin'?(name?chantierSvcByName(name):null):mySvc();
+  const svc=isMultiSvc()?(name?chantierSvcByName(name):null):mySvcs()[0];
   badge.textContent=svc?('Service : '+SVC_LABEL[svc]):'Service : choisis un chantier';
   badge.style.background=svc==='particulier'?'#fdecea':'var(--blue-light)';
   badge.style.color=svc==='particulier'?'#c0392b':'var(--blue)';
   const lv=document.getElementById('livraisonBlock'); if(lv) lv.style.display=svc==='particulier'?'none':'';
 }
+
 function checkNewOrders(){
   const lastVisit=parseInt(localStorage.getItem('delamotte_lastvisit')||'0');
   localStorage.setItem('delamotte_lastvisit', Date.now());
@@ -5274,6 +5315,7 @@ document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='
 document.getElementById('loginUser').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 function doLogout(){
+  resetRetourMode();
   currentUser=null;currentRole=null;cart=[];
   localStorage.removeItem('delamotte_session');
   document.getElementById('loginScreen').style.display='flex';
@@ -5321,7 +5363,8 @@ function renderDlm(){
 }
 // ===== ONGLET CHANTIERS DU SERVICE 001 PARTICULIER (admin + conducteur de ce service) =====
 let chantiersTabQuery='';
-function canManagePartChantiers(){ return currentRole==='admin'||(currentRole==='conducteur'&&mySvc()==='particulier'); }
+function canManagePartChantiers(){ return currentRole==='admin'||(currentRole==='conducteur'&&mySvcs().indexOf('particulier')!==-1); }
+
 function renderChantiersTab(){
   const el=document.getElementById('chantiersTabContent'); if(!el) return;
   if(!canManagePartChantiers()){el.innerHTML='';return;}
@@ -5368,7 +5411,7 @@ function deleteChantierPart(name){
 }
 // ===== SYNCHRONISATION DEPUIS EXCEL (onglets par catégorie, jamais la feuille 'reference') =====
 const EXCEL_SKIP=['catalogue','cse','secours','presentation','nom','contact','feuille commande','stock total','chantier','cmd avec prix','commande','reference','radiateur','fumisterie','sanitaire','atelier dlm incorpo'];
-const EXCEL_NO_NEW=['acier','mapress','pvc-c'];   // lus pour les articles existants, mais ne créent pas de nouveaux articles
+const EXCEL_NO_NEW=['acier','mapress','pvc-c'];   // onglets lus uniquement pour retrouver des articles déjà dans l'appli (jamais de création d'article)
 const EXCEL_SHEET_CAT={'quincaillerie':'Quincailleries','supportage visserie':'Supportage Visserie','accessoire sanitaire':'Accessoire Sanitaire','pvc':'Raccords PVC','pvc blanc':'PVC Blanc','fonte':'Fonte','laiton':'Laiton','per':'PER','multicouche':'Multicouche','cuivres':'Cuivres','cuivre a sertir':'Cuivre a Sertir','pvc-u':'PVC U','pehd':'PEHD','ventilation':'VENTILATION','electricite':'ELECTRICITE','epi':'EPI','divers':'Divers','incorporation':'INCORPORATION','calorifuge':'Calorifuge'};
 let excelSyncState=null;
 function excelKey(s){ return normTxt(s).replace(/\s+/g,' ').trim(); }
@@ -5431,7 +5474,7 @@ function excelPickEntry(entries,cat){
 // compare Excel et application : ne retient que ce qui change
 function excelBuildDiff(parsed){
   const items=[...CATALOGUE,...customRefsCache];
-  const D={noms:[],fourn:[],prix:[],emp:[],stockG:[],stockP:[],nouveaux:[],bloques:[],conflits:[],crayon:0,lus:0};
+  const D={noms:[],fourn:[],prix:[],emp:[],stockG:[],stockP:[],bloques:[],conflits:[],crayon:0,lus:0};
   const app={}, orig={}; items.forEach(function(p){app[p.code]=p;}); CATALOGUE.forEach(function(p){orig[p.code]=p.nom;});
   const chosen={};
   items.forEach(function(p){
@@ -5484,17 +5527,6 @@ function excelBuildDiff(parsed){
       if(p!==stockOf(code,'particulier')) D.stockP.push({code:code,qty:p,old:stockOf(code,'particulier')});
     }
   });
-  // nouveaux articles (codes du fichier absents de l'appli) : onglets de catégorie uniquement, jamais ACIER / Mapress / PVC-C
-  Object.keys(parsed.byCode).forEach(function(code){
-    if(app[code]) return;
-    const ent=parsed.byCode[code].filter(function(e){return EXCEL_NO_NEW.indexOf(e.key)===-1&&EXCEL_SHEET_CAT[e.key]&&e.nom;});
-    if(!ent.length) return;
-    const e=ent[0];
-    if(!ent.every(function(x){return x.key===e.key&&x.nom===e.nom;})){D.conflits.push(code);return;}
-    const emp=(e.emp&&['0','x','-'].indexOf(e.emp.toLowerCase())===-1)?e.emp:'';
-    D.nouveaux.push({code:code,nom:e.nom,cat:EXCEL_SHEET_CAT[e.key],fournisseur:e.fourn,code_fourn:e.cf,prix:e.prix>0?Math.round(e.prix*100)/100:0,emp:emp,qG:e.hasG?e.qG:0,qP:e.hasP?e.qP:0});
-  });
-  D.nouveaux.sort(function(a,b){return parseInt(a.code,10)-parseInt(b.code,10);});
   return D;
 }
 function excelSyncStart(event){
@@ -5509,7 +5541,7 @@ function excelSyncStart(event){
       const parsed=excelParseTabs(wb);
       if(!parsed.sheets.length){showToast('❌ Aucun onglet de catégorie reconnu dans ce fichier');return;}
       const D=excelBuildDiff(parsed);
-      const total=D.noms.length+D.fourn.length+D.prix.length+D.emp.length+D.stockG.length+D.stockP.length+D.nouveaux.length;
+      const total=D.noms.length+D.fourn.length+D.prix.length+D.emp.length+D.stockG.length+D.stockP.length;
       excelSyncState={diff:D,sheets:parsed.sheets};
       if(!total&&!D.conflits.length){showToast('✅ Rien à mettre à jour : l\'application est déjà à jour'+(D.bloques.length?' ('+D.bloques.length+' famille(s) de menu laissée(s) telle(s) quelle(s))':''));return;}
       excelSyncRender();
@@ -5534,11 +5566,10 @@ function excelSyncRender(){
   html+=sec('emp','Emplacements',D.emp,function(x){return x.code+' : '+cut(x.old||'—',14)+' → '+cut(x.emp,14);});
   html+=sec('stockG','🔵 Stock gros chantier (colonne QUANTITE GC)',D.stockG,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
   html+=sec('stockP','🔴 Stock particulier (colonne QUANTITE MAG)',D.stockP,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
-  html+=sec('nouveaux','Nouveaux articles à créer',D.nouveaux,function(x){return x.code+' : '+cut(x.nom,34)+' ['+x.cat+']';});
   if(D.bloques.length) html+='<div style="margin-top:10px;padding:10px;background:#fff3cd;border-radius:8px;font-size:0.78rem;color:#856404"><b>⚠️ Non appliqué (nom de carte du menu raccourci) :</b><br>'+D.bloques.map(function(b){return '« '+cut(b.avant,40)+' » → « '+cut(b.apres,40)+' » ('+b.codes.length+' réf.)';}).join('<br>')+'<br>Corrigez ces noms dans le fichier pour qu\'ils soient homogènes.</div>';
   if(D.conflits.length) html+='<div style="margin-top:10px;padding:10px;background:#fdecea;border-radius:8px;font-size:0.78rem;color:#c0392b"><b>Ignoré (présent dans plusieurs onglets avec des données différentes) :</b> '+D.conflits.slice(0,12).map(editEsc).join(', ')+(D.conflits.length>12?'…':'')+'</div>';
   el.innerHTML=html;
-  document.getElementById('excelSyncApplyBtn').style.display=(D.noms.length+D.fourn.length+D.prix.length+D.emp.length+D.stockG.length+D.stockP.length+D.nouveaux.length)?'':'none';
+  document.getElementById('excelSyncApplyBtn').style.display=(D.noms.length+D.fourn.length+D.prix.length+D.emp.length+D.stockG.length+D.stockP.length)?'':'none';
 }
 function excelSyncApply(){
   const S=excelSyncState; if(!S||currentRole!=='admin') return;
@@ -5548,18 +5579,6 @@ function excelSyncApply(){
   if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
   if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qty:x.qty,updatedAt:now},{merge:true});});}); }
   if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qtyP:x.qty,updatedAt:now},{merge:true});});}); }
-  if(on('nouveaux')){
-    n.nouveaux=D.nouveaux.length;
-    D.nouveaux.forEach(function(x){
-      ops.push(function(b){b.set(db.collection('custom_refs').doc(x.code),{code:x.code,nom:x.nom,cat:x.cat,fournisseur:x.fournisseur,code_fourn:x.code_fourn,prix:x.prix?String(x.prix):'',createdAt:now,source:'excel'});});
-      // le stock d'un nouvel article respecte les cases « stock » (une case absente = rien à décider)
-      const okG=!document.getElementById('xs_stockG')||on('stockG'), okP=!document.getElementById('xs_stockP')||on('stockP');
-      const so={updatedAt:now}; if(okG) so.qty=x.qG; if(okP) so.qtyP=x.qP;
-      if((okG&&x.qG)||(okP&&x.qP)) ops.push(function(b){b.set(db.collection('stock').doc(x.code),so,{merge:true});});
-      if(x.fournisseur||x.code_fourn||x.prix) refsPatch[x.code]={fournisseur:x.fournisseur,code_fourn:x.code_fourn,prix:x.prix?String(x.prix):''};
-      if(x.emp) empPatch[x.code]=x.emp;
-    });
-  }
   if(on('fourn')){ n.fourn=D.fourn.length; D.fourn.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{fournisseur:x.fournisseur,code_fourn:x.code_fourn});}); }
   if(on('prix')){ n.prix=D.prix.length; D.prix.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{prix:String(x.prix)});}); }
   if(on('emp')){ n.emp=D.emp.length; D.emp.forEach(function(x){empPatch[x.code]=x.emp;}); }
@@ -5572,7 +5591,7 @@ function excelSyncApply(){
   if(Object.keys(empPatch).length) p=p.then(function(){return db.collection('config').doc('emplacements').set(Object.assign({_updatedAt:now},empPatch),{merge:true});}).then(function(){Object.assign(EMPLACEMENTS,empPatch);});
   p.then(function(){
     const parts=[]; if(n.noms) parts.push(n.noms+' désignation(s)'); if(n.fourn) parts.push(n.fourn+' fournisseur(s)'); if(n.prix) parts.push(n.prix+' prix'); if(n.emp) parts.push(n.emp+' emplacement(s)');
-    if(n.stockG) parts.push(n.stockG+' stock(s) 🔵'); if(n.stockP) parts.push(n.stockP+' stock(s) 🔴'); if(n.nouveaux) parts.push(n.nouveaux+' nouvel(s) article(s)');
+    if(n.stockG) parts.push(n.stockG+' stock(s) 🔵'); if(n.stockP) parts.push(n.stockP+' stock(s) 🔴');
     showToast('✅ Synchronisation terminée : '+parts.join(', '));
     excelSyncClose();
     filterProducts(); if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
@@ -5779,6 +5798,7 @@ function addVariantToCart(leadCode){
 }
 function changeQty(code,d){const i=document.getElementById('qty_'+code);if(i)i.value=Math.max(1,(parseInt(i.value)||1)+d);}
 function saveCart(){
+  if(retourMode) return;   // le bon de retour n'écrase jamais le panier de commande mémorisé
   localStorage.setItem('delamotte_cart_'+currentUser, JSON.stringify({
     cart,
     chantier:document.getElementById('cartChantier')?.value||'',
@@ -5839,8 +5859,10 @@ function updateCartCount(){
     bnav.textContent=total;
     bnav.style.display=total>0?'flex':'none';
   }
+  if(retourMode) updateRetourBanner();   // le bandeau du bon de retour suit le nombre d'articles
 }
 function openCart(){
+  if(retourMode){openRetourForm();return;}
   updateChantierSelect();
   renderCartItems();
   document.getElementById('cartPanel').classList.add('open');
@@ -5930,7 +5952,7 @@ function listenOrders(){
 //  - chef, particulier, atelier : uniquement leurs propres commandes
 function getVisibleOrders(all){
   if(currentRole==='admin'||currentRole==='comptable') return all;
-  if(currentRole==='conducteur'){ const s=mySvc(); return all.filter(function(o){return orderSvc(o)===s;}); }
+  if(currentRole==='conducteur'){ const s=mySvcs(); return all.filter(function(o){return s.indexOf(orderSvc(o))!==-1;}); }
   return all.filter(function(o){return o.user===currentUser;});
 }
 // plus récent en premier (partout)
@@ -6156,6 +6178,31 @@ function orderEditInfoHtml(o){
 
 // ===== BONS DE RETOUR =====
 const RETOUR_MOTIFS=['Surplus de chantier','Erreur de commande','Article défectueux','Autre'];
+// ===== MODE « BON DE RETOUR » : on choisit les articles dans le vrai catalogue, comme pour une commande =====
+let retourMode=false, orderCartBackup=null, retourDraft=[];
+function updateRetourBanner(){
+  const b=document.getElementById('retourBanner'); if(!b) return;
+  b.style.display=retourMode?'flex':'none';
+  const c=document.getElementById('retourBannerCount'); if(c) c.textContent=retourMode?cart.length:0;
+  document.body.classList.toggle('retour-mode',retourMode);
+}
+function startRetourMode(){
+  if(currentRole==='comptable'){showToast('Accès en lecture seule');return;}
+  const perms=getPermissions(getAllUsers()[currentUser]||{role:currentRole});
+  if(!perms.catalogue){openRetourForm();return;}      // sans accès au catalogue : formulaire avec recherche
+  if(!retourMode){ orderCartBackup=cart; cart=retourDraft; retourMode=true; }   // le panier de commande est mis de côté
+  updateCartCount(); updateRetourBanner();
+  showTab('catalogue'); setBnav('catalogue');
+  showToast('↩️ Bon de retour : choisis les articles à rendre');
+}
+function exitRetourMode(keepDraft){
+  if(!retourMode) return;
+  retourDraft=(keepDraft===false)?[]:cart;
+  cart=orderCartBackup||[]; orderCartBackup=null; retourMode=false;   // le panier de commande est restauré
+  updateCartCount(); updateRetourBanner();
+  if(keepDraft!==false&&retourDraft.length) showToast('Bon de retour mis de côté ('+retourDraft.length+' article(s))');
+}
+function resetRetourMode(){ if(retourMode){cart=orderCartBackup||[];} retourMode=false; orderCartBackup=null; retourDraft=[]; updateRetourBanner(); }
 let retoursCache=[];
 let retourState=null;          // {items:[...], bad:{}}
 let retourReceiveId=null;
@@ -6172,7 +6219,7 @@ function listenRetours(){
 }
 function retoursVisibles(){
   if(currentRole==='admin'||currentRole==='comptable') return retoursCache;
-  if(currentRole==='conducteur'){ const s=mySvc(); return retoursCache.filter(function(r){return retourSvc(r)===s;}); }
+  if(currentRole==='conducteur'){ const s=mySvcs(); return retoursCache.filter(function(r){return s.indexOf(retourSvc(r))!==-1;}); }
   return retoursCache.filter(function(r){return r.user===currentUser;});
 }
 
@@ -6180,9 +6227,10 @@ function updateRetoursBadge(){
   const n=retoursVisibles().filter(function(r){return r.status==='pending';}).length;
   const el=document.getElementById('retoursBadge'); if(el) el.textContent=n?'('+n+')':'';
 }
-function openRetourModal(){
+function openRetourModal(){ startRetourMode(); }    // bouton « Nouveau bon de retour »
+function openRetourForm(){
   if(currentRole==='comptable'){showToast('Accès en lecture seule');return;}
-  retourState={items:[],bad:{}};
+  retourState={items:retourMode?cart:[],bad:{}};      // en mode retour, la liste du bon EST le panier du catalogue
   document.getElementById('retChantierSel').value='';
   pickerSetOptions('ret');
   document.getElementById('retChef').value=currentUser;
@@ -6191,6 +6239,7 @@ function openRetourModal(){
   document.getElementById('retAddSearch').value='';
   document.getElementById('retAddResults').innerHTML='';
   renderRetourItems();
+  const cont=document.getElementById('retContinue'); if(cont) cont.style.display=retourMode?'':'none';
   document.getElementById('retourModal').style.display='flex';
 }
 
@@ -6266,6 +6315,7 @@ function saveRetour(){
   }).then(function(id){
     showToast('✅ Bon de retour '+id+' enregistré');
     closeRetourModal();
+    exitRetourMode(false);
     openRetoursList();
   }).catch(function(e){
     showToast((e&&e.code==='resource-exhausted')?'❌ Non enregistré : quota Firebase atteint, réessaie demain':'❌ Non enregistré'+((e&&e.code)?' ('+e.code+')':''));
@@ -6662,7 +6712,7 @@ function renderSuivi(){
   if(!orders.length){el.innerHTML='<div class="suivi-empty">📭 Aucune commande pour le moment</div>';return;}
   const own=(currentRole==='chef'||currentRole==='particulier'||currentRole==='atelier');
   const title=own?'📋 Mes commandes':currentRole==='conducteur'
-    ?(mySvc()==='particulier'?'🏠 Commandes du service 001 — suivi par chantier':'🏗️ Commandes des gros chantiers — suivi par chantier')
+    ?(mySvcs().length>1?'🏗️ Commandes des 2 services — suivi par chantier':(mySvcs()[0]==='particulier'?'🏠 Commandes du service 001 — suivi par chantier':'🏗️ Commandes des gros chantiers — suivi par chantier'))
     :'🏗️ Suivi par chantier';
   const grouped={};
   sortOrdersDesc(orders).forEach(o=>{
@@ -6675,7 +6725,7 @@ function renderSuivi(){
   const sorted=Object.entries(grouped).sort(function(a,b){
     return (b[1].pending-a[1].pending)||String(b[1].orders[0].createdAt||'').localeCompare(String(a[1].orders[0].createdAt||''));
   });
-  const both=(currentRole==='admin'||currentRole==='comptable');
+  const both=(currentRole==='admin'||currentRole==='comptable'||mySvcs().length>1);
   el.innerHTML=`<h3 style="color:var(--blue);margin-bottom:16px;font-size:1rem">${title}</h3>`+
   sorted.map(([chantier,data])=>{
     const rows=data.orders.map(o=>`
