@@ -145,6 +145,12 @@ const db = firebase.firestore();
   .product-card{position:relative;}
   .fav-btn{position:absolute;top:6px;right:6px;width:30px;height:30px;padding:0;border:none;border-radius:50%;background:rgba(255,255,255,0.92);box-shadow:0 1px 4px rgba(0,0,0,0.18);font-size:1rem;line-height:30px;cursor:pointer;z-index:2;}
   .rbadge{display:inline-block;background:#e67e22;color:#fff;border-radius:10px;min-width:18px;padding:0 6px;font-size:0.72rem;font-weight:800;margin-left:4px;text-align:center;}
+  .cart-qty-ctl{margin-top:6px;display:flex;align-items:center;justify-content:flex-start;gap:4px;flex-wrap:wrap;}
+  .cart-item-name .cart-qty-ctl{justify-content:flex-start;}
+  .cart-qty-ctl .qty-btn{width:30px;height:30px;flex-shrink:0;}
+  .cart-qty-ctl .qty-input{width:56px;height:30px;text-align:center;}
+  .cart-qty-note{font-size:0.74rem;color:var(--blue);font-weight:700;margin-left:4px;}
+  .cart-clear-btn{padding:6px 12px;border:2px solid var(--red);background:var(--white);color:var(--red);border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;}
   .imp-bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;}
   .imp-btn{flex:1;min-width:140px;padding:9px 10px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:center;box-sizing:border-box;}
   .imp-main{background:var(--blue-light);color:var(--blue);border:2px solid var(--blue);}
@@ -847,6 +853,7 @@ const db = firebase.firestore();
       <textarea id="cartComment" rows="2" placeholder="Commentaire (optionnel)"></textarea>
     </div>
     <div class="imp-bar"><label class="imp-btn imp-main">📥 Importer un panier Excel<input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importCartExcel(event,'cart')"></label><button type="button" class="imp-btn imp-sec" onclick="downloadCartTemplate()">📄 Modèle Excel</button></div><div id="cartImportResult" class="imp-result"></div>
+    <div id="cartToolbar" style="display:none;justify-content:space-between;align-items:center;gap:8px;margin:6px 0 2px;"><span id="cartLinesCount" style="font-size:0.78rem;color:var(--muted);font-weight:600;"></span><button type="button" class="cart-clear-btn" onclick="emptyCart()">🗑️ Vider le panier</button></div>
     <div class="cart-items" id="cartItems"></div>
     <button class="btn-send-order" onclick="sendOrder()">&#9989; Envoyer la commande</button>
   </div>
@@ -6130,6 +6137,32 @@ function costExport(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Coûts par chantier'); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),'Détail par article'); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(c),'Par mois');
   XLSX.writeFile(wb,'Couts_DELAMOTTE_'+(D.range.from||'debut')+'_'+(D.range.to||'aujourdhui')+'.xlsx'); showToast('Export des coûts téléchargé ✅');
 }
+// ===== RECOMMANDER : remet dans le panier les références d'une commande déjà passée =====
+function reorderOrder(id){
+  if(retourMode){ showToast('Quittez d\'abord le mode bon de retour'); return; }
+  const o=getOrders().find(function(x){return x.id===id;}); if(!o) return;
+  const dlmOk=canSeeDlm(), known={};
+  [...CATALOGUE,...customRefsCache].forEach(function(p){ if(p.cat!==DLM_CAT||dlmOk) known[p.code]=p; });   // articles encore au catalogue ET autorisés pour cet utilisateur
+  let added=0; const skipped=[];
+  (o.items||[]).forEach(function(it){
+    const p=known[it.code];
+    if(!p){ skipped.push(it.code); return; }
+    const nom=getEffectiveName(it.code,p.nom), L=BARRE_LONGUEURS[it.code];
+    const idx=cart.findIndex(function(x){return x.code===it.code;});
+    if(L){   // barre : on rejoue le même nombre de barres (quantité panier en mètres)
+      const barres=it.barres||Math.max(1,Math.round(it.qty/L)), qs=barres*L;
+      if(idx>=0){ cart[idx].qty+=qs; cart[idx].barres=(cart[idx].barres||0)+barres; }
+      else cart.push({code:it.code,nom:nom,qty:qs,barres:barres,longueur:L});
+    }else{
+      if(idx>=0) cart[idx].qty+=it.qty; else cart.push({code:it.code,nom:nom,qty:it.qty});
+    }
+    added++;
+  });
+  updateCartCount(); saveCart();
+  if(!added){ showToast('⚠️ Aucune référence de '+id+' n\'est disponible'+(skipped.length?' ('+skipped.slice(0,3).join(', ')+')':'')); return; }
+  showToast('🔁 '+added+' référence(s) de '+id+' remise(s) dans le panier'+(skipped.length?' — '+skipped.length+' indisponible(s) : '+skipped.slice(0,3).join(', ')+(skipped.length>3?'…':''):''));
+  openCart();
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -6455,24 +6488,58 @@ function closeCart(){document.getElementById('cartPanel').classList.remove('open
 function closeCartOutside(e){if(e.target===document.getElementById('cartPanel'))closeCart();}
 function renderCartItems(){
   const el=document.getElementById('cartItems');
+  const tb=document.getElementById('cartToolbar');
+  if(tb){ tb.style.display=cart.length?'flex':'none'; const n=document.getElementById('cartLinesCount'); if(n) n.textContent=cart.length+' ligne'+(cart.length>1?'s':''); }
   if(!cart.length){el.innerHTML='<div class="cart-empty">\uD83D\uDED2 Votre panier est vide</div>';return;}
   el.innerHTML=cart.map((item,i)=>{
     const imgNum=IMG_MAP[item.code];
     const imgHtml=imgNum
       ? `<img class="cart-item-img" src="image${imgNum}.png" alt="${item.nom}" onerror="this.outerHTML='<div class=cart-item-img-placeholder>📦</div>'">`
       : `<div class="cart-item-img-placeholder">📦</div>`;
-    const qtyDisplay=item.barres
-      ? `${item.barres} barre${item.barres>1?'s':''} (${item.qty}ml)`
-      : `x${item.qty}`;
+    const isB=!!item.barres;
+    const shown=isB?item.barres:item.qty;      // barres : on modifie le NOMBRE DE BARRES (la quantité en mètres suit)
+    const note=isB?`<span class="cart-qty-note">barre${item.barres>1?'s':''} = ${item.qty} ml</span>`:'';
     return `<div class="cart-item">
       ${imgHtml}
-      <div class="cart-item-name"><div>${item.nom}</div><div class="cart-item-code">${item.code}</div></div>
-      <div class="cart-item-qty">${qtyDisplay}</div>
-      <button class="btn-remove-item" onclick="removeFromCart(${i})">&#128465;</button>
+      <div class="cart-item-name"><div>${item.nom}</div><div class="cart-item-code">${item.code}</div>
+        <div class="qty-control cart-qty-ctl">
+          <button class="qty-btn" onclick="stepCartQty(${i},-1)" aria-label="Moins">&#8722;</button>
+          <input class="qty-input" type="number" inputmode="numeric" min="1" max="9999" value="${shown}" onfocus="this.select()" onchange="setCartQty(${i},this.value)" aria-label="Quantité">
+          <button class="qty-btn" onclick="stepCartQty(${i},1)" aria-label="Plus">+</button>
+          ${note}
+        </div>
+      </div>
+      <button class="btn-remove-item" onclick="removeFromCart(${i})" title="Retirer cette ligne">&#128465;</button>
     </div>`;
   }).join('');
 }
+
 function removeFromCart(i){cart.splice(i,1);renderCartItems();updateCartCount();saveCart();}
+// modification de la quantité d'une ligne du panier (pour une barre : nombre de barres, la quantité en mètres est recalculée)
+function setCartQty(i,v){
+  const it=cart[i]; if(!it) return;
+  let n=parseInt(v,10);
+  if(isNaN(n)||n<1){ showToast('Quantité minimale : 1 (pour retirer la ligne, utilisez la corbeille)'); renderCartItems(); return; }
+  n=Math.min(n,9999);
+  if(it.barres){
+    const L=it.longueur||BARRE_LONGUEURS[it.code]||(it.qty/it.barres);
+    it.barres=n; it.qty=n*L; if(!it.longueur) it.longueur=L;
+  }else it.qty=n;
+  renderCartItems(); updateCartCount(); saveCart();
+}
+function stepCartQty(i,d){
+  const it=cart[i]; if(!it) return;
+  const cur=it.barres?it.barres:it.qty;
+  if(cur+d<1) return;     // minimum 1 : pas de suppression par erreur
+  setCartQty(i,cur+d);
+}
+// vide tout le panier (les lignes uniquement : le chantier et le commentaire choisis sont conservés)
+function emptyCart(){
+  if(!cart.length) return;
+  if(!confirm('Vider tout le panier ('+cart.length+' ligne'+(cart.length>1?'s':'')+') ?')) return;
+  cart=[]; renderCartItems(); updateCartCount(); saveCart();
+  showToast('🗑️ Panier vidé');
+}
 function setLivraison(val){
   document.getElementById('cartLivraison').value=val;
   const ent=document.getElementById('livraisonEntreprise');
@@ -6590,6 +6657,7 @@ function renderOrders(){
       ${orderValueHtml(o)}
       ${orderEditInfoHtml(o)}
       <div class="order-actions">
+        <button class="btn-print" style="background:#27ae60" onclick="reorderOrder('${o.id}')" title="Remettre ces références dans mon panier">🔁 Recommander</button>
         <button class="btn-print" onclick="printOrder('${o.id}')">Bon de commande</button>
         <button class="btn-print" style="background:var(--muted)" onclick="openCommentModal('${o.id}')">💬 Commentaires</button>
         ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-print" style="background:#8e44ad" onclick="openStockModal('${o.id}')">📦 Bon fournisseur</button>`:''}
@@ -7352,6 +7420,7 @@ function renderSuivi(){
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitée':'En attente'}</span>
+          <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:#27ae60" onclick="reorderOrder('${o.id}')" title="Recommander : remettre ces références dans mon panier">🔁</button>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem" onclick="printOrder('${o.id}')">🖨️</button>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:var(--muted)" onclick="openCommentModal('${o.id}')">💬</button>
           ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-done" style="padding:5px 10px;font-size:0.75rem" onclick="markDone('${o.id}')">✅</button>`:''}
