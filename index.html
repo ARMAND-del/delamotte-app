@@ -134,6 +134,17 @@ const db = firebase.firestore();
   .chantier-picker{position:relative;width:100%;}
   .chantier-picker input{width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;}
   .retour-mode .cart-btn{background:#d35400;}
+  .mvt-row{padding:10px 0;border-bottom:1px solid var(--border);font-size:0.82rem;overflow-wrap:anywhere;}
+  .mvt-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:0.74rem;margin-bottom:2px;}
+  .mvt-delta-p{color:var(--green);font-weight:800;} .mvt-delta-m{color:var(--red);font-weight:800;}
+  .cost-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0;}
+  .cost-ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;}
+  .cost-ctl select,.cost-ctl input{padding:7px 8px;border:2px solid var(--border);border-radius:8px;font-size:0.8rem;background:var(--white);color:var(--text);}
+  .cost-chip{padding:6px 10px;border-radius:16px;border:2px solid var(--border);background:var(--white);color:var(--muted);font-size:0.76rem;font-weight:700;cursor:pointer;}
+  .cost-chip.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+  .product-card{position:relative;}
+  .fav-btn{position:absolute;top:6px;right:6px;width:30px;height:30px;padding:0;border:none;border-radius:50%;background:rgba(255,255,255,0.92);box-shadow:0 1px 4px rgba(0,0,0,0.18);font-size:1rem;line-height:30px;cursor:pointer;z-index:2;}
+  .rbadge{display:inline-block;background:#e67e22;color:#fff;border-radius:10px;min-width:18px;padding:0 6px;font-size:0.72rem;font-weight:800;margin-left:4px;text-align:center;}
   .imp-bar{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;}
   .imp-btn{flex:1;min-width:140px;padding:9px 10px;border-radius:8px;font-size:0.78rem;font-weight:700;cursor:pointer;text-align:center;box-sizing:border-box;}
   .imp-main{background:var(--blue-light);color:var(--blue);border:2px solid var(--blue);}
@@ -302,7 +313,7 @@ const db = firebase.firestore();
   /* DASHBOARD */
   .dashboard{background:var(--white);border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
   .dashboard h3{font-size:0.9rem;color:var(--muted);margin-bottom:12px;font-weight:600;}
-  .dashboard-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;}
   .dash-card{background:var(--gray);border-radius:10px;padding:12px;text-align:center;}
   .dash-num{font-size:1.6rem;font-weight:800;color:var(--blue);}
   .dash-label{font-size:0.72rem;color:var(--muted);margin-top:2px;}
@@ -370,7 +381,7 @@ const db = firebase.firestore();
   </div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showTab('catalogue')">&#128230; Catalogue</button>
-    <button class="nav-tab" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span></button>
+    <button class="nav-tab" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span></button>
     <button class="nav-tab" id="nav-tab-users" style="display:none" onclick="showTab('users')">&#128100; Utilisateurs</button>
     <button class="nav-tab" id="nav-tab-suivi" style="display:none" onclick="showTab('suivi')">&#128205; Suivi</button>
     <button class="nav-tab" id="nav-tab-stats" style="display:none" onclick="showTab('stats')">&#128202; Statistiques</button>
@@ -378,6 +389,7 @@ const db = firebase.firestore();
     <button class="nav-tab" id="nav-tab-inventaire" style="display:none" onclick="showTab('inventaire')">📦 Inventaire</button>
     <button class="nav-tab" id="nav-tab-reappro" style="display:none" onclick="showTab('reappro')">🔄 Réappro</button>
     <button class="nav-tab" id="nav-tab-chantiers" style="display:none" onclick="showTab('chantiers')">🏗️ Chantiers</button>
+    <button class="nav-tab" id="nav-tab-couts" style="display:none" onclick="showTab('couts')">💶 Coûts</button>
   </div>
   <div class="main">
     <div id="tabCatalogue">
@@ -400,7 +412,7 @@ const db = firebase.firestore();
     <div id="tabOrders" style="display:none">
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
         <button onclick="openRetourModal()" style="padding:9px 14px;background:#e67e22;color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">↩️ Nouveau bon de retour</button>
-        <button onclick="openRetoursList()" style="padding:9px 14px;background:var(--white);color:var(--text);border:2px solid var(--border);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📋 Bons de retour <span id="retoursBadge" style="color:#e67e22"></span></button>
+        <button onclick="openRetoursList()" style="padding:9px 14px;background:var(--white);color:var(--text);border:2px solid var(--border);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📋 Bons de retour <span id="retoursBadge"></span></button>
       </div>
       <div class="stats-bar" id="statsBar"></div>
       <div class="filter-bar" id="filterBar"></div>
@@ -444,6 +456,7 @@ const db = firebase.firestore();
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_users"> 👤 Utilisateurs</label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_chantiers"> 🏗️ Chantiers 001</label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_dlm"> 🛠️ ATELIER DLM</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="perm_couts"> 💶 Coûts (valeur des commandes)</label>
           </div>
           
         </div>
@@ -451,7 +464,17 @@ const db = firebase.firestore();
       </div>
       <div id="usersList"></div>
 
-      <!-- GESTION CHANTIERS -->
+      <!-- SAUVEGARDE -->
+  <div class="user-form" style="margin-top:20px">
+    <h3>💾 Sauvegarde des données</h3>
+    <p style="font-size:0.8rem;color:var(--muted);margin:4px 0 10px">Télécharge une copie de toutes les données (commandes, bons de retour, stocks, réappro, journal, chantiers, utilisateurs). Les mots de passe ne sont pas exportés.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-save-user" onclick="backupExcel()">📥 Export Excel complet</button>
+      <button class="btn-save-user" style="background:var(--muted)" onclick="backupJson()">🧾 Sauvegarde technique (JSON)</button>
+    </div>
+    <div id="backupInfo" style="font-size:0.75rem;color:var(--muted);margin-top:8px"></div>
+  </div>
+  <!-- GESTION CHANTIERS -->
       <div class="user-form" style="margin-top:20px">
         <h3>🏗️ Gros chantiers</h3>
         <div class="user-form-grid" style="margin-bottom:10px">
@@ -465,9 +488,8 @@ const db = firebase.firestore();
         <div id="chantiersList" style="margin-top:12px"></div>
       </div>
     </div>
-  </div>
   <!-- SUIVI CHANTIERS -->
-  <div id="tabSuivi"id="tabSuivi" style="display:none">
+  <div id="tabSuivi" style="display:none">
     <div id="suiviContent"></div>
   </div>
   <div id="tabStats" style="display:none">
@@ -483,10 +505,12 @@ const db = firebase.firestore();
     <div id="reapproContent"></div>
   </div>
     <div id="tabChantiers" style="display:none"><div id="chantiersTabContent"></div></div>
+    <div id="tabCouts" style="display:none"><div id="costSection"></div></div>
+  </div><!-- fin .main -->
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
       <button class="bnav-btn active" id="bnav-catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
-      <button class="bnav-btn" id="bnav-orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
+      <button class="bnav-btn" id="bnav-orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
       <button class="bnav-btn" id="bnav-users" style="display:none" onclick="showTab('users');setBnav('users')"><span class="bnav-icon">&#128100;</span>Utilisateurs</button>
       <button class="bnav-btn" id="bnav-suivi" style="display:none" onclick="showTab('suivi');setBnav('suivi')"><span class="bnav-icon">&#128205;</span>Suivi</button>
       <button class="bnav-btn" id="bnav-stats" style="display:none" onclick="showTab('stats');setBnav('stats')"><span class="bnav-icon">&#128202;</span>Stats</button>
@@ -494,6 +518,7 @@ const db = firebase.firestore();
       <button class="bnav-btn" id="bnav-inventaire" style="display:none" onclick="showTab('inventaire');setBnav('inventaire')"><span class="bnav-icon">📦</span>Stock</button>
       <button class="bnav-btn" id="bnav-reappro" style="display:none" onclick="showTab('reappro');setBnav('reappro')"><span class="bnav-icon">🔄</span>Réappro</button>
       <button class="bnav-btn" id="bnav-chantiers" style="display:none" onclick="showTab('chantiers');setBnav('chantiers')"><span class="bnav-icon">🏗️</span>Chantiers</button>
+      <button class="bnav-btn" id="bnav-couts" style="display:none" onclick="showTab('couts');setBnav('couts')"><span class="bnav-icon">💶</span>Coûts</button>
       <button class="bnav-btn" onclick="openCart()" style="position:relative"><span class="bnav-icon">&#128722;</span>Panier<span id="bnavCartCount" style="display:none;position:absolute;top:4px;right:calc(50% - 18px);background:var(--orange);color:#fff;border-radius:50%;width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;"></span></button>
     </div>
   </div>
@@ -508,7 +533,7 @@ const db = firebase.firestore();
       <h3 style="color:#2980b9;font-size:1rem;">✏️ Modifier la commande <span id="editOrderId"></span></h3>
       <button onclick="closeEditOrderModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
-    <div id="editOrderWarn" style="display:none;background:#fff3cd;color:#856404;border-radius:8px;padding:10px 12px;font-size:0.8rem;margin-bottom:8px;">⚠️ Commande déjà traitée : le stock et le réappro ne sont <b>pas</b> recalculés automatiquement. Corrige-les à la main si besoin.</div>
+    <div id="editOrderWarn" style="display:none;background:#fff3cd;color:#856404;border-radius:8px;padding:10px 12px;font-size:0.8rem;margin-bottom:8px;">⚠️ Commande déjà traitée : le stock et le réappro ne sont <b>pas</b> recalculés par cette modification. Pour corriger proprement : « Remettre en attente » (le stock est remis), modifiez, puis retraitez la commande.</div>
     <div id="editChantierBlock"><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Chantier</label><select id="editChantierSel" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></select></div>
     <div><label id="editChefLabel" style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Chef de chantier</label><input type="text" id="editChef" style="width:100%;padding:9px 12px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;"></div>
     <div id="editLivraisonBlock"><label style="font-size:0.78rem;font-weight:700;color:var(--muted);display:block;margin:10px 0 4px;">Lieu de livraison</label>
@@ -597,6 +622,35 @@ const db = firebase.firestore();
       <button onclick="excelSyncClose()" style="flex:1;padding:12px;background:var(--gray);border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;color:var(--text);">Annuler</button>
       <button id="excelSyncApplyBtn" onclick="excelSyncApply()" style="flex:2;padding:12px;background:#e67e22;color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;cursor:pointer;">✅ Appliquer</button>
     </div>
+  </div>
+</div>
+
+<!-- JOURNAL DU STOCK -->
+<div id="mvtModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:315;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+  <div style="background:var(--white);border-radius:16px;padding:18px;width:100%;max-width:640px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="color:var(--blue);font-size:1rem;">📜 Journal des mouvements de stock</h3>
+      <button onclick="closeMvtModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <div class="cost-ctl">
+      <input type="text" id="mvtQ" placeholder="🔍 Code, nom, n° de commande..." oninput="mvtFilter.q=this.value;mvtRender()" style="flex:1;min-width:140px;">
+      <select id="mvtSvc" onchange="mvtFilter.svc=this.value;mvtRender()"><option value="all">🔵🔴 Les 2 stocks</option><option value="gros">🔵 Gros chantier</option><option value="particulier">🔴 Particulier</option></select>
+      <select id="mvtType" onchange="mvtFilter.type=this.value;mvtRender()"></select>
+    </div>
+    <div id="mvtCount" style="font-size:0.76rem;color:var(--muted);margin-bottom:4px;"></div>
+    <div id="mvtList" style="overflow-y:auto;flex:1;min-height:120px;"></div>
+    <button onclick="mvtExport()" style="margin-top:10px;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📥 Exporter ce journal (Excel)</button>
+  </div>
+</div>
+<!-- ALERTES STOCK BAS -->
+<div id="alertModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:315;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+  <div style="background:var(--white);border-radius:16px;padding:18px;width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 id="alertTitle" style="color:#e67e22;font-size:1rem;">⚠️ Stock bas</h3>
+      <button onclick="closeAlertModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <div id="alertList" style="overflow-y:auto;flex:1;min-height:100px;"></div>
+    <button onclick="alertExport()" style="margin-top:10px;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📥 Exporter cette liste (Excel)</button>
   </div>
 </div>
 
@@ -3962,9 +4016,6 @@ const CATALOGUE=[
   {code:'101338',nom:'Support sufix 600x180x100',cat:'VENTILATION'},
   {code:'101339',nom:'Support sufix 600x220x100',cat:'VENTILATION'},
   {code:'101340',nom:'Support sufix 1000x180x100',cat:'VENTILATION'},
-  {code:'101341',nom:'plot antivibratil M8',cat:'VENTILATION'},
-  {code:'101342',nom:'Plot antivibratil avec coupelle',cat:'VENTILATION'},
-  {code:'101343',nom:'Pince de serrage pour cadre gaine',cat:'VENTILATION'},
   {code:'101344',nom:'Registre galva Ø125',cat:'VENTILATION'},
   {code:'101345',nom:'Registre galva Ø160',cat:'VENTILATION'},
   {code:'101346',nom:'Registre galva Ø200',cat:'VENTILATION'},
@@ -4994,6 +5045,7 @@ function startSession(u){
   perms.corbeille ? show('bnav-corbeille') : hide('bnav-corbeille');
   perms.users     ? show('bnav-users')     : hide('bnav-users');
   perms.chantiers ? show('bnav-chantiers') : hide('bnav-chantiers');
+  perms.couts     ? show('bnav-couts')     : hide('bnav-couts');
 
   // Top nav tabs
   perms.suivi     ? show('nav-tab-suivi')      : hide('nav-tab-suivi');
@@ -5003,6 +5055,7 @@ function startSession(u){
   perms.corbeille ? show('nav-tab-corbeille')  : hide('nav-tab-corbeille');
   perms.users     ? show('nav-tab-users')      : hide('nav-tab-users');
   perms.chantiers ? show('nav-tab-chantiers')  : hide('nav-tab-chantiers');
+  perms.couts     ? show('nav-tab-couts')      : hide('nav-tab-couts');
 
   // Date filter bar (stats)
   document.getElementById('dateFilterBar').style.display=perms.stats?'flex':'none';
@@ -5022,6 +5075,7 @@ function startSession(u){
   listenReapproStock();
   loadRefsFournFromFirebase();
   loadEmplacementsFromFirebase();
+  favLoad();
   listenCustomRefs();
   listenCustomNames();
   listenRetours();
@@ -5045,14 +5099,14 @@ function listenUsers(){
 }
 // Permissions par défaut selon le rôle
 const ROLE_DEFAULTS={
-  admin:      {catalogue:true,orders:true,suivi:true,stats:true,reappro:true,inventaire:true,corbeille:true,users:true,chantiers:true,dlm:true},
-  chef:       {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  conducteur: {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  comptable:  {catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false},
-  atelier:    {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:true},
+  admin:      {catalogue:true,orders:true,suivi:true,stats:true,reappro:true,inventaire:true,corbeille:true,users:true,chantiers:true,dlm:true,couts:true},
+  chef:       {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false,couts:false},
+  conducteur: {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false,couts:true},
+  comptable:  {catalogue:true,orders:true,suivi:false,stats:true,reappro:true,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false,couts:true},
+  particulier:{catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:false,couts:false},
+  atelier:    {catalogue:true,orders:true,suivi:true,stats:false,reappro:false,inventaire:false,corbeille:false,users:false,chantiers:false,dlm:true,couts:false},
 };
-const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users','chantiers','dlm'];
+const ALL_PERMS=['catalogue','orders','suivi','stats','reappro','inventaire','corbeille','users','chantiers','dlm','couts'];
 
 // ===== SERVICES : 'gros' (gros chantier) et 'particulier' (service 001) =====
 const SVC_LABEL={gros:'Gros chantier',particulier:'001 Particulier'};
@@ -5089,6 +5143,8 @@ function getPermissions(userData){
   if(role==='admin') ALL_PERMS.forEach(function(p){perms[p]=true;});
   // la gestion des chantiers du service particulier : admin et conducteur de ce service uniquement
   if(role!=='admin'&&!gerePart) perms.chantiers=false;
+  // la valeur des commandes (prix) : uniquement admin, comptable et conducteurs, quelle que soit la case cochée
+  perms.couts=!!perms.couts&&['admin','comptable','conducteur'].indexOf(role)!==-1;
   return perms;
 }
 
@@ -5116,6 +5172,7 @@ function updatePermissionsFromRole(){
 
 function renderUsers(){
   const all=getAllUsers();
+  const bi=document.getElementById('backupInfo'); if(bi){const lb=localStorage.getItem('delamotte_last_backup'); bi.textContent=lb?'Dernière sauvegarde : '+lb:'Aucune sauvegarde faite depuis cet appareil.';}
   document.getElementById('userFormTitle').textContent='➕ Ajouter un utilisateur';
   document.getElementById('newUserName').value='';
   document.getElementById('newUserPass').value='';
@@ -5123,7 +5180,7 @@ function renderUsers(){
   document.getElementById('editUserOrigName').value='';
   updatePermissionsFromRole();
   updateConducteurSelect();
-  const ICONS={catalogue:'📦',orders:'📋',suivi:'📍',stats:'📊',reappro:'🔄',inventaire:'🏭',corbeille:'🗑️',users:'👤',chantiers:'🏗️',dlm:'🛠️'};
+  const ICONS={catalogue:'📦',orders:'📋',suivi:'📍',stats:'📊',reappro:'🔄',inventaire:'🏭',corbeille:'🗑️',users:'👤',chantiers:'🏗️',dlm:'🛠️',couts:'💶'};
   const ROLE_ORDER=['admin','comptable','conducteur','chef','atelier','particulier'];
   const ROLE_TITLE={admin:'🔑 Admin',comptable:'📊 Comptable',conducteur:'🦺 Conducteurs de travaux',chef:'👷 Chefs de chantier',atelier:'🛠️ Atelier',particulier:'🏠 Particuliers'};
   const rk=function(r){const i=ROLE_ORDER.indexOf(r);return i<0?99:i;};
@@ -5679,6 +5736,10 @@ function excelSyncApply(){
   if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
   if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qty:x.qty,updatedAt:now},{merge:true});});}); }
   if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qtyP:x.qty,updatedAt:now},{merge:true});});}); }
+  if(n.stockG||n.stockP){
+    const det=[]; if(n.stockG) D.stockG.forEach(function(x){det.push({code:x.code,s:'gros',a:x.old,b:x.qty});}); if(n.stockP) D.stockP.forEach(function(x){det.push({code:x.code,s:'particulier',a:x.old,b:x.qty});});
+    ops.push(function(b){mvtSummary(b,'synchro','Synchronisation Excel : '+(n.stockG||0)+' stock(s) 🔵 et '+(n.stockP||0)+' stock(s) 🔴 remplacés par les valeurs du fichier',det);});
+  }
   if(on('fourn')){ n.fourn=D.fourn.length; D.fourn.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{fournisseur:x.fournisseur,code_fourn:x.code_fourn});}); }
   if(on('prix')){ n.prix=D.prix.length; D.prix.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{prix:String(x.prix)});}); }
   if(on('emp')){ n.emp=D.emp.length; D.emp.forEach(function(x){empPatch[x.code]=x.emp;}); }
@@ -5779,6 +5840,296 @@ function importCartExcel(event,target){
   };
   reader.readAsArrayBuffer(file);
 }
+// ===== JOURNAL DES MOUVEMENTS DE STOCK (collection stock_mouvements) =====
+const MVT_TYPES={commande:'📦 Commande traitée',annulation:'↩️ Commande remise en attente',retour:'↩️ Bon de retour traité',annulretour:'↩️ Bon de retour annulé',reception:'🚚 Réception fournisseur',inventaire:'✏️ Saisie dans l\'inventaire',synchro:'🔄 Synchro Excel',reset:'🗑️ Réinitialisation'};
+function mvtNewId(){ return 'mv_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7); }
+function articleName(code){ const p=CATALOGUE.find(function(x){return x.code===code;})||customRefsCache.find(function(x){return x.code===code;}); return p?getEffectiveName(code,p.nom):''; }
+function mvtAdd(batch,m){
+  const id=mvtNewId();
+  batch.set(db.collection('stock_mouvements').doc(id),{id:id,code:m.code,nom:m.nom||articleName(m.code),service:m.service,avant:m.avant,apres:m.apres,delta:m.apres-m.avant,type:m.type,ref:m.ref||'',comment:m.comment||'',user:currentUser,date:new Date().toISOString()});
+}
+function mvtSummary(batch,type,summary,details){
+  const id=mvtNewId();
+  batch.set(db.collection('stock_mouvements').doc(id),{id:id,summaryDoc:true,type:type,summary:summary,details:details||[],service:'',user:currentUser,date:new Date().toISOString()});
+}
+let mvtCache=[], mvtFilter={q:'',svc:'all',type:'all'};
+function openMvtModal(code){
+  mvtFilter={q:code||'',svc:'all',type:'all'};
+  document.getElementById('mvtQ').value=mvtFilter.q;
+  document.getElementById('mvtSvc').value='all';
+  const sel=document.getElementById('mvtType');
+  sel.innerHTML='<option value="all">Tous les types</option>'+Object.keys(MVT_TYPES).map(function(k){return '<option value="'+k+'">'+MVT_TYPES[k]+'</option>';}).join('');
+  document.getElementById('mvtList').innerHTML='<p style="color:var(--muted);text-align:center;padding:20px">Chargement...</p>';
+  document.getElementById('mvtModal').style.display='flex';
+  db.collection('stock_mouvements').orderBy('date','desc').limit(1000).get().then(function(snap){
+    mvtCache=snap.docs.map(function(d){return d.data();}); mvtRender();
+  }).catch(function(){document.getElementById('mvtList').innerHTML='<p style="color:var(--red);text-align:center;padding:20px">Erreur de chargement</p>';});
+}
+function closeMvtModal(){ document.getElementById('mvtModal').style.display='none'; }
+function mvtFlat(){
+  const words=normTxt(mvtFilter.q||'').split(/\s+/).filter(Boolean), out=[];
+  mvtCache.forEach(function(d){
+    if(d.summaryDoc){
+      if(words.length&&d.details&&d.details.length){   // recherche d'un article : on déplie les synchros / remises à zéro
+        d.details.forEach(function(x){out.push({date:d.date,type:d.type,ref:'',code:x.code,nom:articleName(x.code),service:x.s,avant:x.a,apres:x.b,delta:x.b-x.a,user:d.user});});
+      }else out.push(d);
+      return;
+    }
+    out.push(d);
+  });
+  return out.filter(function(m){
+    if(mvtFilter.svc!=='all'&&m.service&&m.service!==mvtFilter.svc) return false;
+    if(mvtFilter.type!=='all'&&m.type!==mvtFilter.type) return false;
+    if(words.length){ if(!m.code) return false; const t=normTxt(m.code+' '+(m.nom||'')+' '+(m.ref||'')); return words.every(function(w){return t.indexOf(w)!==-1;}); }
+    return true;
+  }).sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
+}
+function mvtDate(iso){ const d=new Date(iso); return isNaN(d)?'':d.toLocaleDateString('fr-FR')+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+function mvtRowHtml(m){
+  const typ=MVT_TYPES[m.type]||m.type;
+  if(m.summaryDoc) return '<div class="mvt-row"><div class="mvt-top"><span>'+editEsc(typ)+'</span><span>'+mvtDate(m.date)+'</span></div><div>'+editEsc(m.summary||'')+'</div><div class="mvt-top"><span>par '+editEsc(m.user||'')+'</span></div></div>';
+  const dl=m.delta>0?'<span class="mvt-delta-p">+'+m.delta+'</span>':'<span class="mvt-delta-m">'+m.delta+'</span>';
+  return '<div class="mvt-row"><div class="mvt-top"><span>'+editEsc(typ)+(m.ref?' · '+editEsc(m.ref):'')+'</span><span>'+mvtDate(m.date)+'</span></div>'
+    +'<div><b>'+editEsc(m.code)+'</b> — '+editEsc(m.nom||articleName(m.code))+'</div>'
+    +'<div>'+svcIcon(m.service)+' '+m.avant+' → <b>'+m.apres+'</b> ('+dl+')'+(m.comment?' · <i>'+editEsc(m.comment)+'</i>':'')+'</div>'
+    +'<div class="mvt-top"><span>par '+editEsc(m.user||'')+'</span></div></div>';
+}
+function mvtRender(){
+  const rows=mvtFlat(), shown=rows.slice(0,300);
+  document.getElementById('mvtCount').textContent=rows.length+' mouvement(s)'+(rows.length>300?' — les 300 plus récents affichés':'')+(mvtCache.length>=1000?' · journal limité aux 1000 derniers enregistrements':'');
+  document.getElementById('mvtList').innerHTML=shown.length?shown.map(mvtRowHtml).join(''):'<p style="color:var(--muted);text-align:center;padding:24px">Aucun mouvement</p>';
+}
+function mvtExport(){
+  const rows=mvtFlat(), data=[['Date','Type','Réf.','Code','Désignation','Stock','Avant','Après','Variation','Par','Détail']];
+  rows.forEach(function(m){ data.push([mvtDate(m.date),MVT_TYPES[m.type]||m.type,m.ref||'',m.code||'',m.nom||(m.code?articleName(m.code):''),m.service==='particulier'?'Particulier':(m.service==='gros'?'Gros chantier':''),m.avant===undefined?'':m.avant,m.apres===undefined?'':m.apres,m.delta===undefined?'':m.delta,m.user||'',m.summary||m.comment||'']); });
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(data),'Journal du stock');
+  XLSX.writeFile(wb,'Journal_stock_DELAMOTTE_'+isoDay(new Date())+'.xlsx'); showToast('Journal exporté ✅');
+}
+// annulation du traitement d'une commande : remet exactement ce qui a été déduit (stock) et retire du réappro ce qui y avait été ajouté
+function undoOrderInto(batch,o,type,comment){
+  const ap=o.stockApplied||[], svc=o.stockService||orderSvc(o), now=new Date().toISOString();
+  ap.forEach(function(a){
+    const cur=stockOf(a.code,svc), nv=cur+(a.deducted||0);
+    batch.set(db.collection('stock').doc(a.code),{[stockField(svc)]:nv,updatedAt:now},{merge:true});
+    mvtAdd(batch,{code:a.code,nom:a.nom,service:svc,avant:cur,apres:nv,type:type,ref:o.id,comment:comment});
+    const ex=reapproStockCache[a.code];
+    if(ex&&ex.totalQty>0){
+      const chants=Object.assign({},ex.chantiers||{}), sv=Object.assign({},reapproServices(ex));
+      const dec=Math.min(a.reappro||0,chants[o.chantier]||0,ex.totalQty,sv[svc]||0);
+      if(dec>0){
+        chants[o.chantier]-=dec; if(chants[o.chantier]<=0) delete chants[o.chantier];
+        sv[svc]=(sv[svc]||0)-dec;
+        const nt=ex.totalQty-dec;
+        if(nt<=0) batch.delete(db.collection('reappro_stock').doc(a.code));
+        else batch.set(db.collection('reappro_stock').doc(a.code),{code:a.code,nom:ex.nom||a.nom,totalQty:nt,chantiers:chants,services:sv,updatedAt:now});
+      }
+    }
+  });
+  return ap.length;
+}
+function retourUndo(id){
+  const r=retoursCache.find(function(x){return x.id===id;});
+  if(!r||r.status!=='received'||currentRole!=='admin') return;
+  const lignes=r.receivedItems||[], svc=r.stockService||retourSvc(r);
+  if(!confirm('Annuler le traitement du bon '+id+' ?\nLes quantités remises en stock ('+svcIcon(svc)+') seront retirées et le réappro rétabli. Le bon repasse « à traiter ».')) return;
+  const batch=db.batch(), now=new Date().toISOString();
+  lignes.forEach(function(l){
+    const cur=stockOf(l.code,svc), nv=Math.max(0,cur-(l.stock||0));
+    batch.set(db.collection('stock').doc(l.code),{[stockField(svc)]:nv,updatedAt:now},{merge:true});
+    mvtAdd(batch,{code:l.code,nom:l.nom,service:svc,avant:cur,apres:nv,type:'annulretour',ref:id,comment:'Traitement du bon annulé'});
+  });
+  (r.reapproAjuste||[]).forEach(function(x){
+    const ex=reapproStockCache[x.code]||{totalQty:0,chantiers:{}};
+    const chants=Object.assign({},ex.chantiers||{}); chants[r.chantier]=(chants[r.chantier]||0)+x.moins;
+    const sv=Object.assign({},reapproServices(ex.totalQty?ex:null)); sv[svc]=(sv[svc]||0)+x.moins;
+    const it=(r.items||[]).find(function(i){return i.code===x.code;})||{};
+    batch.set(db.collection('reappro_stock').doc(x.code),{code:x.code,nom:ex.nom||it.nom||articleName(x.code),totalQty:(ex.totalQty||0)+x.moins,chantiers:chants,services:sv,updatedAt:now});
+  });
+  batch.update(db.collection('retours').doc(id),{status:'pending',receivedAt:null,receivedBy:null,receivedItems:null,reapproAjuste:null,stockService:null});
+  batch.commit().then(function(){showToast('↩️ Traitement du bon annulé');renderRetoursList();}).catch(function(){showToast('❌ Non enregistré : rien n\'a été modifié');});
+}
+
+// ===== ALERTES STOCK BAS (articles dont le stock est suivi et ≤ seuil) =====
+let alertSvcOpen='gros';
+function stockAlertList(svc){
+  const trk=svc==='particulier'?stockTrkP:stockTrkG;
+  return [...CATALOGUE,...customRefsCache].filter(function(p){return trk[p.code]&&stockOf(p.code,svc)<=invSeuilAlerte;})
+    .map(function(p){return {code:p.code,nom:getEffectiveName(p.code,p.nom),cat:p.cat,qty:stockOf(p.code,svc)};})
+    .sort(function(a,b){return (a.qty-b.qty)||a.nom.localeCompare(b.nom,'fr');});
+}
+function openStockAlerts(svc){
+  alertSvcOpen=svc==='particulier'?'particulier':'gros';
+  const list=stockAlertList(alertSvcOpen);
+  document.getElementById('alertTitle').textContent='⚠️ Stock bas '+svcIcon(alertSvcOpen)+' '+(alertSvcOpen==='particulier'?'Particulier':'Gros chantier')+' (≤ '+invSeuilAlerte+')';
+  document.getElementById('alertList').innerHTML=list.length?list.map(function(a){
+    const col=a.qty===0?'var(--red)':'var(--orange)';
+    return '<div class="mvt-row"><div class="mvt-top"><span>'+editEsc(a.code)+' · '+editEsc(a.cat)+'</span><span style="color:'+col+';font-weight:800">'+(a.qty===0?'❌ Rupture':'⚠️ '+a.qty)+'</span></div><div>'+editEsc(a.nom)+'</div></div>';
+  }).join(''):'<p style="color:var(--muted);text-align:center;padding:24px">✅ Aucun article en stock bas</p>';
+  document.getElementById('alertModal').style.display='flex';
+}
+function closeAlertModal(){ document.getElementById('alertModal').style.display='none'; }
+function alertExport(){
+  const list=stockAlertList(alertSvcOpen), data=[['Code','Désignation','Catégorie','Stock','Fournisseur','Code fournisseur','Prix U.']];
+  list.forEach(function(a){const r=REFS_FOURN[a.code]||{}; data.push([a.code,a.nom,a.cat,a.qty,r.fournisseur||'',r.code_fourn||'',r.prix?parseFloat(r.prix):'']);});
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(data),'Stock bas');
+  XLSX.writeFile(wb,'Stock_bas_'+(alertSvcOpen==='particulier'?'particulier':'gros_chantier')+'_'+isoDay(new Date())+'.xlsx'); showToast('Liste exportée ✅');
+}
+
+// ===== SAUVEGARDE : EXPORT DE TOUTES LES DONNÉES =====
+function downloadBlob(name,text,mime){
+  const url=URL.createObjectURL(new Blob([text],{type:mime})), a=document.createElement('a');
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(url);},4000);
+}
+function backupCollect(){
+  const names=['orders','retours','users','chantiers','stock','reappro_stock','reappro_commande','historique_commandes','custom_refs','custom_names','stock_mouvements','meta','config'];
+  return Promise.all(names.map(function(n){return db.collection(n).get().then(function(s){return [n,s.docs.map(function(d){return Object.assign({_id:d.id},d.data());})];});}))
+    .then(function(arr){const o={}; arr.forEach(function(x){o[x[0]]=x[1];}); return o;});
+}
+function backupMark(){
+  const t=new Date().toLocaleString('fr-FR'); localStorage.setItem('delamotte_last_backup',t);
+  const el=document.getElementById('backupInfo'); if(el) el.textContent='Dernière sauvegarde : '+t;
+}
+function backupBuildSheets(D){
+  const sv=function(s){return s==='particulier'?'001 Particulier':'Gros chantier';}, px=function(c){return parseFloat((REFS_FOURN[c]||{}).prix)||0;};
+  const S=[];
+  const art=[['Code','Désignation','Catégorie','Fournisseur','Code fournisseur','Prix U.','Emplacement','Stock gros chantier','Stock particulier','Valeur gros chantier','Valeur particulier']];
+  [...CATALOGUE,...customRefsCache].forEach(function(p){const r=REFS_FOURN[p.code]||{},g=stockOf(p.code,'gros'),q=stockOf(p.code,'particulier'),pr=px(p.code); art.push([p.code,getEffectiveName(p.code,p.nom),p.cat,r.fournisseur||'',r.code_fourn||'',pr||'',EMPLACEMENTS[p.code]||'',g,q,Math.round(g*pr*100)/100,Math.round(q*pr*100)/100]);});
+  S.push({name:'Articles et stock',rows:art});
+  const cmd=[['N° commande','Date','Service','Chantier','Demandeur','Saisi par','Statut','Livraison estimée','Code','Désignation','Quantité','Barres','Prix U.','Total HT','Commentaire','Supprimée']];
+  D.orders.slice().sort(function(a,b){return String(a.createdAt).localeCompare(String(b.createdAt));}).forEach(function(o){(o.items||[]).forEach(function(i){const pr=px(i.code); cmd.push([o.id,o.date||'',sv(orderSvc(o)),o.chantier||'',o.chef||'',o.user||'',o.status==='done'?'Traitée':'En attente',o.dateLivraison||'',i.code,i.nom,i.qty,i.barres||'',pr||'',Math.round(i.qty*pr*100)/100,o.comment||'',o.deleted?'oui':'']);});});
+  S.push({name:'Commandes',rows:cmd});
+  const ret=[['N° bon','Date','Service','Chantier','Rendu par','Motif','Statut','Code','Désignation','Quantité rendue','Quantité remise en stock','Traité par','Traité le','Commentaire']];
+  D.retours.slice().sort(function(a,b){return String(a.createdAt).localeCompare(String(b.createdAt));}).forEach(function(r){(r.items||[]).forEach(function(i){const rc=(r.receivedItems||[]).find(function(x){return x.code===i.code;}); ret.push([r.id,r.date||'',sv(retourSvc(r)),r.chantier||'',r.renduPar||r.user||'',r.motif||'',r.status==='received'?'Traité':'À traiter',i.code,i.nom,i.qty,rc?rc.stock:'',r.receivedBy||'',r.receivedAt?mvtDate(r.receivedAt):'',r.comment||'']);});});
+  S.push({name:'Bons de retour',rows:ret});
+  const rea=[['Code','Désignation','Total à réapprovisionner','dont gros chantier','dont particulier','Chantiers concernés','Fournisseur']];
+  D.reappro_stock.forEach(function(r){const s=reapproServices(r); rea.push([r._id,r.nom||articleName(r._id),r.totalQty||0,s.gros,s.particulier,Object.keys(r.chantiers||{}).map(function(c){return c+' ('+r.chantiers[c]+')';}).join(' ; '),(REFS_FOURN[r._id]||{}).fournisseur||'']);});
+  S.push({name:'Réappro en attente',rows:rea});
+  const mv=[['Date','Type','Réf.','Code','Désignation','Stock','Avant','Après','Variation','Par','Détail']];
+  D.stock_mouvements.slice().sort(function(a,b){return String(a.date).localeCompare(String(b.date));}).forEach(function(m){mv.push([mvtDate(m.date),MVT_TYPES[m.type]||m.type,m.ref||'',m.code||'',m.nom||'',m.service==='particulier'?'Particulier':(m.service==='gros'?'Gros chantier':''),m.avant===undefined?'':m.avant,m.apres===undefined?'':m.apres,m.delta===undefined?'':m.delta,m.user||'',m.summary||m.comment||'']);});
+  S.push({name:'Mouvements de stock',rows:mv});
+  const us=[['Utilisateur','Rôle','Service','Accès']];
+  D.users.forEach(function(u){us.push([u._id,u.role||'',u.role==='admin'||u.role==='comptable'?'—':(userSvcValue(u)==='both'?'Les 2 services':SVC_LABEL[userSvcValue(u)]),Object.keys(getPermissions(u)).filter(function(k){return getPermissions(u)[k];}).join(', ')]);});
+  S.push({name:'Utilisateurs',rows:us});
+  const ch=[['Chantier','Service','Conducteur','Créé le']];
+  D.chantiers.forEach(function(c){ch.push([c.name||c._id,sv(chantierSvc(c)),c.conducteur||'',c.createdAt?mvtDate(c.createdAt):'']);});
+  S.push({name:'Chantiers',rows:ch});
+  const cn=[['Code','Désignation modifiée','Désignation du catalogue']];
+  D.custom_names.forEach(function(n){const p=CATALOGUE.find(function(x){return x.code===n._id;}); cn.push([n._id,n.nom||'',p?p.nom:'']);});
+  S.push({name:'Désignations modifiées',rows:cn});
+  const cr=[['Code','Désignation','Catégorie','Fournisseur','Code fournisseur','Prix']];
+  D.custom_refs.forEach(function(r){cr.push([r.code||r._id,r.nom||'',r.cat||'',r.fournisseur||'',r.code_fourn||'',r.prix||'']);});
+  S.push({name:'Références ajoutées',rows:cr});
+  return S;
+}
+function backupExcel(){
+  if(currentRole!=='admin') return;
+  showToast('Préparation de la sauvegarde...');
+  backupCollect().then(function(D){
+    const wb=XLSX.utils.book_new();
+    backupBuildSheets(D).forEach(function(s){XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(s.rows),s.name);});
+    XLSX.writeFile(wb,'Sauvegarde_DELAMOTTE_'+isoDay(new Date())+'.xlsx'); backupMark(); showToast('✅ Sauvegarde Excel téléchargée');
+  }).catch(function(){showToast('❌ Erreur de lecture des données');});
+}
+function backupJson(){
+  if(currentRole!=='admin') return;
+  showToast('Préparation de la sauvegarde...');
+  backupCollect().then(function(D){
+    D.users=D.users.map(function(u){const c=Object.assign({},u); delete c.pass; return c;});   // mots de passe jamais exportés
+    downloadBlob('Sauvegarde_DELAMOTTE_'+isoDay(new Date())+'.json',JSON.stringify({application:'DELAMOTTE',exporteLe:new Date().toISOString(),exportePar:currentUser,note:'Mots de passe non inclus',collections:D},null,1),'application/json');
+    backupMark(); showToast('✅ Sauvegarde technique téléchargée');
+  }).catch(function(){showToast('❌ Erreur de lecture des données');});
+}
+
+// ===== VALEUR DES COMMANDES : visible uniquement par admin, comptable et conducteurs =====
+function canSeeValues(){ if(currentRole==='admin') return true; const u=getAllUsers()[currentUser]; return !!(u&&getPermissions(u).couts); }
+function orderValue(o){
+  let t=0, miss=0;
+  (o.items||[]).forEach(function(i){ const pr=parseFloat((REFS_FOURN[i.code]||{}).prix)||0; if(!pr) miss++; t+=i.qty*pr; });
+  return {total:t,miss:miss};
+}
+function orderValueHtml(o){
+  if(!canSeeValues()) return '';
+  const v=orderValue(o);
+  return '<div class="order-info" style="font-weight:700;color:var(--blue)">💶 '+fmtEur(v.total)+' HT'+(v.miss?' <span style="font-weight:400;color:var(--muted)">(dont '+v.miss+' ligne(s) sans prix)</span>':'')+'</div>';
+}
+// ===== PILOTAGE : COÛTS PAR CHANTIER ET PAR SERVICE (prix d'achat × quantité, comme l'export Batigest) =====
+let costF={period:'month',from:'',to:'',svc:'all',status:'done',sort:'code'}, costData=null;
+function fmtEur(n){ return (n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+function isoDay(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function costRange(){
+  const n=new Date(), y=n.getFullYear(), m=n.getMonth();
+  if(costF.period==='month') return {from:isoDay(new Date(y,m,1)),to:isoDay(new Date(y,m+1,0))};
+  if(costF.period==='prev') return {from:isoDay(new Date(y,m-1,1)),to:isoDay(new Date(y,m,0))};
+  if(costF.period==='year') return {from:y+'-01-01',to:y+'-12-31'};
+  if(costF.period==='custom') return {from:costF.from||'',to:costF.to||''};
+  return {from:'',to:''};
+}
+function costCompute(){
+  const R=costRange();
+  const orders=getVisibleOrders(getOrders()).filter(function(o){
+    if(costF.status==='done'&&o.status!=='done') return false;
+    if(costF.svc!=='all'&&orderSvc(o)!==costF.svc) return false;
+    const d=String(o.createdAt||'').slice(0,10);
+    if(R.from&&d<R.from) return false; if(R.to&&d>R.to) return false;
+    return true;
+  });
+  const byCh={}, months={}, arts={}, svcTot={gros:0,particulier:0}, noPrice={lines:0,codes:{}}; let total=0;
+  orders.forEach(function(o){
+    const sv=orderSvc(o), mk=String(o.createdAt||'').slice(0,7);
+    const c=byCh[o.chantier]||(byCh[o.chantier]={chantier:o.chantier,svc:sv,cmds:0,art:0,cost:0,items:{}});
+    c.cmds++;
+    months[mk]=months[mk]||{gros:0,particulier:0};
+    (o.items||[]).forEach(function(i){
+      const pr=parseFloat((REFS_FOURN[i.code]||{}).prix)||0, amt=i.qty*pr;
+      if(!pr){noPrice.lines++; noPrice.codes[i.code]=1;}
+      c.art+=i.qty; c.cost+=amt; total+=amt; svcTot[sv]+=amt; months[mk][sv]+=amt;
+      const it=c.items[i.code]||(c.items[i.code]={code:i.code,nom:i.nom,qty:0,cost:0,pr:pr}); it.qty+=i.qty; it.cost+=amt;
+      const a=arts[i.code]||(arts[i.code]={code:i.code,nom:i.nom,qty:0,cost:0}); a.qty+=i.qty; a.cost+=amt;
+    });
+  });
+  const rows=Object.values(byCh);
+  rows.sort(costF.sort==='cost'?function(a,b){return b.cost-a.cost;}:function(a,b){return a.chantier.localeCompare(b.chantier,'fr',{numeric:true,sensitivity:'base'});});
+  return {range:R,nb:orders.length,total:total,svc:svcTot,rows:rows,months:Object.keys(months).sort().map(function(k){return {k:k,gros:months[k].gros,particulier:months[k].particulier};}),
+    arts:Object.values(arts).sort(function(a,b){return b.cost-a.cost;}).slice(0,10),noPrice:{lines:noPrice.lines,codes:Object.keys(noPrice.codes)}};
+}
+function costSet(k,v){ costF[k]=v; renderCostSection(); }
+function costToggle(i){ const el=document.getElementById('costDet_'+i); if(el) el.style.display=el.style.display==='none'?'table-row':'none'; }
+function renderCostSection(){
+  const el=document.getElementById('costSection'); if(!el) return;
+  if(!canSeeValues()){ el.innerHTML=''; return; }
+  const multi=(currentRole==='admin'||currentRole==='comptable'||mySvcs().length>1);
+  if(!multi) costF.svc=mySvcs()[0];
+  costData=costCompute(); const D=costData;
+  const chip=function(k,v,l){return '<button class="cost-chip'+(costF[k]===v?' on':'')+'" onclick="costSet(\''+k+'\',\''+v+'\')">'+l+'</button>';};
+  const maxM=Math.max.apply(null,[1].concat(D.months.map(function(m){return m.gros+m.particulier;})));
+  el.innerHTML='<div class="stats-section"><h3>💶 Coûts par chantier et par service</h3>'
+   +'<div class="cost-ctl">'+chip('period','month','Ce mois')+chip('period','prev','Mois dernier')+chip('period','year','Cette année')+chip('period','all','Tout')+chip('period','custom','Dates…')+'</div>'
+   +(costF.period==='custom'?'<div class="cost-ctl">du <input type="date" value="'+editEsc(costF.from)+'" onchange="costSet(\'from\',this.value)"> au <input type="date" value="'+editEsc(costF.to)+'" onchange="costSet(\'to\',this.value)"></div>':'')
+   +'<div class="cost-ctl">'+(multi?'<select onchange="costSet(\'svc\',this.value)"><option value="all"'+(costF.svc==='all'?' selected':'')+'>🔵🔴 Les 2 services</option><option value="gros"'+(costF.svc==='gros'?' selected':'')+'>🔵 Gros chantier</option><option value="particulier"'+(costF.svc==='particulier'?' selected':'')+'>🔴 Particulier</option></select>':'')
+   +'<select onchange="costSet(\'status\',this.value)"><option value="done"'+(costF.status==='done'?' selected':'')+'>Commandes traitées</option><option value="all"'+(costF.status==='all'?' selected':'')+'>Toutes les commandes</option></select>'
+   +'<select onchange="costSet(\'sort\',this.value)"><option value="code"'+(costF.sort==='code'?' selected':'')+'>Tri : code chantier</option><option value="cost"'+(costF.sort==='cost'?' selected':'')+'>Tri : coût décroissant</option></select>'
+   +'<button class="cost-chip" onclick="costExport()">📥 Exporter</button></div>'
+   +'<div class="cost-kpis"><div class="stat-card"><div class="stats-big" style="font-size:1.1rem">'+fmtEur(D.total)+'</div><div class="stats-label">Total HT</div></div>'
+   +'<div class="stat-card"><div class="stats-big" style="font-size:1.1rem;color:#0077b6">'+fmtEur(D.svc.gros)+'</div><div class="stats-label">🔵 Gros chantier</div></div>'
+   +'<div class="stat-card"><div class="stats-big" style="font-size:1.1rem;color:#e74c3c">'+fmtEur(D.svc.particulier)+'</div><div class="stats-label">🔴 Particulier</div></div>'
+   +'<div class="stat-card"><div class="stats-big" style="font-size:1.1rem">'+D.nb+'</div><div class="stats-label">Commandes</div></div></div>'
+   +(D.noPrice.lines?'<p style="font-size:0.76rem;color:#c0392b;margin-bottom:8px">⚠️ '+D.noPrice.lines+' ligne(s) sans prix dans la fiche article (comptées à 0 €) : '+D.noPrice.codes.slice(0,8).map(editEsc).join(', ')+(D.noPrice.codes.length>8?'…':'')+'</p>':'')
+   +(D.rows.length?'<div style="overflow-x:auto"><table class="inv-table"><thead><tr><th>Chantier</th><th>Service</th><th style="text-align:right">Cmd</th><th style="text-align:right">Articles</th><th style="text-align:right">Coût HT</th></tr></thead><tbody>'
+     +D.rows.map(function(r,i){return '<tr style="cursor:pointer" onclick="costToggle('+i+')"><td>'+editEsc(r.chantier)+' <span style="color:var(--muted);font-size:0.7rem">▾</span></td><td>'+(r.svc==='particulier'?'🔴':'🔵')+'</td><td style="text-align:right">'+r.cmds+'</td><td style="text-align:right">'+r.art+'</td><td style="text-align:right;font-weight:700">'+fmtEur(r.cost)+'</td></tr>'
+       +'<tr id="costDet_'+i+'" style="display:none"><td colspan="5" style="background:var(--gray);font-size:0.76rem">'+Object.values(r.items).sort(function(a,b){return b.cost-a.cost;}).map(function(it){return editEsc(it.code)+' — '+editEsc(it.nom)+' : '+it.qty+' × '+(it.pr?fmtEur(it.pr):'sans prix')+' = <b>'+fmtEur(it.cost)+'</b>';}).join('<br>')+'</td></tr>';}).join('')
+     +'</tbody></table></div>':'<p style="color:var(--muted);font-size:0.85rem;padding:10px 0">Aucune commande sur cette période</p>')
+   +(D.months.length?'<h3 style="margin-top:16px">📅 Coût par mois</h3>'+D.months.map(function(m){const t=m.gros+m.particulier; return '<div class="stats-bar-item"><div class="stats-bar-label">'+m.k+'</div><div class="stats-bar-track"><div class="stats-bar-fill" style="width:'+Math.round(t/maxM*100)+'%;background:#9b59b6"></div></div><div class="stats-bar-val" style="min-width:90px">'+fmtEur(t)+'</div></div>';}).join(''):'')
+   +(D.arts.length?'<h3 style="margin-top:16px">🏆 Top 10 articles par coût</h3>'+D.arts.map(function(a){return '<div class="mvt-row"><div class="mvt-top"><span>'+editEsc(a.code)+'</span><span><b>'+fmtEur(a.cost)+'</b></span></div><div>'+editEsc(a.nom)+' <span style="color:var(--muted)">× '+a.qty+'</span></div></div>';}).join(''):'')
+   +'</div>';
+}
+function costExport(){
+  const D=costData||costCompute(), wb=XLSX.utils.book_new();
+  const a=[['Chantier','Service','Commandes','Articles','Coût HT']]; D.rows.forEach(function(r){a.push([r.chantier,r.svc==='particulier'?'001 Particulier':'Gros chantier',r.cmds,r.art,Math.round(r.cost*100)/100]);}); a.push(['TOTAL','',D.nb,'',Math.round(D.total*100)/100]);
+  const b=[['Chantier','Service','Code','Désignation','Quantité','Prix U.','Total HT']]; D.rows.forEach(function(r){Object.values(r.items).forEach(function(it){b.push([r.chantier,r.svc==='particulier'?'001 Particulier':'Gros chantier',it.code,it.nom,it.qty,it.pr||'',Math.round(it.cost*100)/100]);});});
+  const c=[['Mois','Gros chantier','Particulier','Total']]; D.months.forEach(function(m){c.push([m.k,Math.round(m.gros*100)/100,Math.round(m.particulier*100)/100,Math.round((m.gros+m.particulier)*100)/100]);});
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(a),'Coûts par chantier'); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(b),'Détail par article'); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(c),'Par mois');
+  XLSX.writeFile(wb,'Couts_DELAMOTTE_'+(D.range.from||'debut')+'_'+(D.range.to||'aujourdhui')+'.xlsx'); showToast('Export des coûts téléchargé ✅');
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -5789,6 +6140,7 @@ function showTab(tab){
   document.getElementById('tabInventaire').style.display=tab==='inventaire'?'block':'none';
   document.getElementById('tabReappro').style.display=tab==='reappro'?'block':'none';
   document.getElementById('tabChantiers').style.display=tab==='chantiers'?'block':'none';
+  document.getElementById('tabCouts').style.display=tab==='couts'?'block':'none';
   document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',
     (i===0&&tab==='catalogue')||(i===1&&tab==='orders')||(i===2&&tab==='users')||(i===3&&tab==='suivi')||(i===4&&tab==='stats')||(i===5&&tab==='corbeille')));
   if(tab==='orders') renderOrders();
@@ -5799,6 +6151,7 @@ function showTab(tab){
   if(tab==='inventaire') renderInventaire();
   if(tab==='reappro') renderReappro();
   if(tab==='chantiers') renderChantiersTab();
+  if(tab==='couts') renderCostSection();
 }
 function setBnav(tab){
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
@@ -5808,7 +6161,9 @@ const CATS=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
 // ===== CATÉGORIE « ATELIER DLM » du catalogue : visible uniquement pour les utilisateurs choisis par l'admin (case « ATELIER DLM ») =====
 const DLM_CAT='ATELIER DLM';
 function canSeeDlm(){ if(currentRole==='admin') return true; const u=getAllUsers()[currentUser]; return !!(u&&getPermissions(u).dlm); }
-function visibleCats(){ const base=CATS.filter(function(c){return c!==DLM_CAT;}); return canSeeDlm()?base.concat([DLM_CAT]):base; }
+const FAV_CAT='Habituels';   // « ⭐ Habituels » : mes favoris + les articles que je commande le plus souvent
+CAT_ICON[FAV_CAT]='\u2B50';
+function visibleCats(){ const base=CATS.filter(function(c){return c!==DLM_CAT;}); const withFav=[base[0],FAV_CAT].concat(base.slice(1)); return canSeeDlm()?withFav.concat([DLM_CAT]):withFav; }
 CAT_ICON[DLM_CAT]='\u{1F6E0}\u{FE0F}';
 function buildCatalogue(){
   document.getElementById('catScroll').innerHTML=visibleCats().map(c=>`<button class="cat-btn${c===currentCat?' active':''}" onclick="setCat('${c}')">${CAT_ICON[c]||'\uD83D\uDCE6'} ${c}</button>`).join('');
@@ -5816,7 +6171,7 @@ function buildCatalogue(){
 }
 function setCat(c){
   currentCat=c;
-  document.getElementById('catScroll').innerHTML=CATS.map(cat=>`<button class="cat-btn${cat===c?' active':''}" onclick="setCat('${cat}')">${CAT_ICON[cat]||'\uD83D\uDCE6'} ${cat}</button>`).join('');
+  document.getElementById('catScroll').innerHTML=visibleCats().map(cat=>`<button class="cat-btn${cat===c?' active':''}" onclick="setCat('${cat}')">${CAT_ICON[cat]||'\uD83D\uDCE6'} ${cat}</button>`).join('');
   filterProducts();
 }
 // nom commun d'une famille (préfixe commun coupé à un mot entier) : sert au nom de la carte du menu déroulant
@@ -5843,9 +6198,16 @@ function filterProducts(){
   const dlmOk=canSeeDlm();
   const allItems=[...CATALOGUE,...customRefsCache].filter(p=>p.cat!==DLM_CAT||dlmOk).map(p=>customNamesCache[p.code]?Object.assign({},p,{nom:customNamesCache[p.code]}):p);
   const idxOf=new Map(allItems.map((p,i)=>[p,i])); // position dans le catalogue
-  const items=allItems.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
+  const favSet=currentCat===FAV_CAT?new Set(favCodes.concat(freqCodes())):null;   // vue « Habituels »
+  const catOk=function(p){ return currentCat==='Toutes'||(favSet?favSet.has(p.code):p.cat===currentCat); };
+  const items=allItems.filter(p=>catOk(p)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
   const g=document.getElementById('productsGrid');
   const countEl=document.getElementById('searchCount');
+  if(currentCat===FAV_CAT&&!items.length&&!q){
+    g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 16px;font-size:0.9rem;">⭐ Aucun habituel pour le moment.<br>Appuie sur ☆ sur un article pour l\'ajouter ici ; les articles que tu commandes souvent apparaîtront aussi tout seuls.</div>';
+    if(countEl) countEl.textContent='';
+    return;
+  }
   if(currentCat===DLM_CAT&&!items.length&&!q){
     g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px 16px;font-size:0.9rem;">🛠️ Catégorie ATELIER DLM : aucun article pour le moment.</div>';
     if(countEl) countEl.textContent='';
@@ -5870,7 +6232,7 @@ function filterProducts(){
     const cats=new Set(group.map(p=>p.cat));
     if(cats.size !== 1) return;
     // Check if all items in group are in current filter
-    const inFilter=group.filter(p=>(currentCat==='Toutes'||p.cat===currentCat)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
+    const inFilter=group.filter(p=>catOk(p)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
     if(inFilter.length < 2) return; // don't group if only 1 visible
     // Ordre du catalogue (emplacement choisi)
     inFilter.sort((a,b)=>idxOf.get(a)-idxOf.get(b));
@@ -5893,7 +6255,7 @@ function filterProducts(){
     if(variantLeaders.has(p.code)){
       const num=IMG_MAP[p.code];
       const group=imgGroups[num]
-        .filter(x=>(currentCat==='Toutes'||x.cat===currentCat)&&(!q||normTxt(x.code).includes(q)||normTxt(x.nom).includes(q)))
+        .filter(x=>catOk(x)&&(!q||normTxt(x.code).includes(q)||normTxt(x.nom).includes(q)))
         .sort((a,b)=>idxOf.get(a)-idxOf.get(b));
 
       // Extract generic name - find longest common prefix across ALL items
@@ -5909,6 +6271,7 @@ function filterProducts(){
       const stockHtml=currentRole==='admin'?stockBadgesHtml(p.code):'';
 
       return `<div class="product-card">
+        <button class="fav-btn" data-sel="${selectId}" onclick="toggleFavVariant('${p.code}')" title="Ajouter aux habituels (article choisi)">${favStarText(group[0].code)}</button>
         <div class="product-img-wrap">${imgHtml}</div>
         <div class="product-code" id="vcode_${p.code}">${group[0].code}</div>
         <div class="product-name">${genericName}</div>
@@ -5932,6 +6295,7 @@ function filterProducts(){
 
     // Normal card
     return `<div class="product-card">
+      <button class="fav-btn" data-code="${p.code}" onclick="toggleFav(this.dataset.code)" title="Ajouter aux habituels">${favStarText(p.code)}</button>
       <div class="product-img-wrap">${imgHtml}</div>
       <div class="product-code">${p.code}</div>
       <div class="product-name">${getEffectiveName(p.code,p.nom)}</div>
@@ -5948,12 +6312,48 @@ function filterProducts(){
   }).join('');
 }
 
+// ===== MES ARTICLES HABITUELS : favoris (⭐, enregistrés sur le compte) + articles les plus souvent commandés =====
+let favCodes=[];
+function favKey(){ return 'delamotte_fav_'+currentUser; }
+function favLoad(){
+  try{ favCodes=JSON.parse(localStorage.getItem(favKey())||'[]'); }catch(e){ favCodes=[]; }
+  db.collection('favoris').doc(currentUser).get().then(function(doc){
+    if(doc.exists){ favCodes=doc.data().codes||[]; localStorage.setItem(favKey(),JSON.stringify(favCodes)); if(currentCat===FAV_CAT) filterProducts(); else favRefreshStars(); }
+  }).catch(function(){});
+}
+function favSave(){
+  localStorage.setItem(favKey(),JSON.stringify(favCodes));
+  return db.collection('favoris').doc(currentUser).set({codes:favCodes,updatedAt:new Date().toISOString()}).catch(function(){showToast('⚠️ Favori gardé sur cet appareil seulement (connexion ?)');});
+}
+function isFav(code){ return favCodes.indexOf(code)!==-1; }
+function favStarText(code){ return isFav(code)?'⭐':'☆'; }
+function toggleFav(code){
+  const i=favCodes.indexOf(code);
+  if(i===-1){ favCodes.push(code); showToast('⭐ Ajouté à mes habituels'); } else { favCodes.splice(i,1); showToast('Retiré de mes habituels'); }
+  favSave(); favRefreshStars();
+  if(currentCat===FAV_CAT) filterProducts();
+}
+function toggleFavVariant(lead){ const sel=document.getElementById('var_'+lead); if(sel) toggleFav(sel.value); }
+function favRefreshStars(){
+  document.querySelectorAll('.fav-btn[data-code]').forEach(function(b){ b.textContent=favStarText(b.dataset.code); });
+  document.querySelectorAll('.fav-btn[data-sel]').forEach(function(b){ const s=document.getElementById(b.dataset.sel); if(s) b.textContent=favStarText(s.value); });
+}
+// les 15 articles que cet utilisateur commande le plus souvent (nombre de commandes qui les contiennent)
+function freqCodes(){
+  const cnt={}, last={};
+  getOrders().filter(function(o){return o.user===currentUser;}).forEach(function(o){
+    const seen={}, t=Date.parse(o.createdAt)||0;
+    (o.items||[]).forEach(function(i){ if(seen[i.code]) return; seen[i.code]=1; cnt[i.code]=(cnt[i.code]||0)+1; last[i.code]=Math.max(last[i.code]||0,t); });
+  });
+  return Object.keys(cnt).sort(function(a,b){return (cnt[b]-cnt[a])||(last[b]-last[a]);}).slice(0,15);
+}
 function onVariantChange(leadCode){
   const sel=document.getElementById('var_'+leadCode);
   if(!sel) return;
   const selectedCode=sel.value;
   const codeEl=document.getElementById('vcode_'+leadCode);
   if(codeEl) codeEl.textContent=selectedCode;
+  favRefreshStars();
 }
 
 function addVariantToCart(leadCode){
@@ -6127,6 +6527,7 @@ function listenOrders(){
     const orders=snap.docs.map(d=>d.data()).filter(o=>!o.deleted);
     localStorage.setItem('delamotte_orders',JSON.stringify(orders));
     renderOrders();updateOrdersBadge();renderDashboard();
+    if(currentCat===FAV_CAT) filterProducts();   // « souvent commandés » suit les nouvelles commandes
   });
 }
 // Règles de visibilité :
@@ -6186,6 +6587,7 @@ function renderOrders(){
       <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${(()=>{const s=orderSvc(o);return '<span style="background:'+(s==='particulier'?'#fdecea':'#e8f4fd')+';color:'+(s==='particulier'?'#c0392b':'#2980b9')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(s==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')+'</span>';})()} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
       ${o.dateLivraison?`<div class="order-info" style="color:var(--green);font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
+      ${orderValueHtml(o)}
       ${orderEditInfoHtml(o)}
       <div class="order-actions">
         <button class="btn-print" onclick="printOrder('${o.id}')">Bon de commande</button>
@@ -6201,14 +6603,18 @@ function renderOrders(){
 function setFilter(f){orderFilter=f;renderOrders();}
 let pendingMarkDoneId=null;
 function reopenOrder(id){
-  if(!confirm('Remettre cette commande en attente ?')) return;
-  db.collection('orders').doc(id).update({status:'pending',dateLivraison:'',dateLivraisonISO:''})
-    .then(()=>showToast('Commande remise en attente ↩️'))
-    .catch(()=>showToast('Erreur'));
+  const o=getOrders().find(x=>x.id===id); if(!o) return;
+  const ap=o.stockApplied||[];
+  let msg='Remettre cette commande en attente ?';
+  if(ap.length) msg+='\n\nLes stocks déduits ('+ap.length+' article(s), '+svcIcon(o.stockService||orderSvc(o))+') seront REMIS et le réappro corrigé.';
+  else if(o.status==='done') msg+='\n\n⚠️ Cette commande a été traitée avant la mise à jour : le stock ne peut pas être remis automatiquement (corrigez-le dans l\'Inventaire si besoin).';
+  if(!confirm(msg)) return;
+  const batch=db.batch();
+  undoOrderInto(batch,o,'annulation','Commande '+id+' remise en attente');
+  batch.update(db.collection('orders').doc(id),{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reopenedBy:currentUser,reopenedAt:new Date().toISOString()});
+  batch.commit().then(()=>showToast(ap.length?'Commande remise en attente, stock remis ↩️':'Commande remise en attente ↩️'))
+    .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
 }
-
-let editingOrderId=null;
-let editState=null;   // {items:[articles en cours de modification], origItems:[articles d'origine], bad:{}}
 
 function editEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // quantité « vue par l'utilisateur » : nombre de barres pour une barre, sinon la quantité
@@ -6391,15 +6797,24 @@ let retourState=null;          // {items:[...], bad:{}}
 let retourReceiveId=null;
 let retourReceiveState=null;   // {qty:[...], bad:{}}
 
+let retoursKnown=null;
 function listenRetours(){
+  retoursKnown=null;
   db.collection('retours').onSnapshot(function(snap){
     retoursCache=snap.docs.map(function(d){return d.data();}).filter(function(r){return !r.deleted;});
     retoursCache.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
+    // alerte du magasin : un nouveau bon de retour vient d'arriver (jamais au premier chargement)
+    if(retoursKnown!==null&&currentRole==='admin'){
+      const fresh=retoursCache.filter(function(r){return r.status==='pending'&&retoursKnown.indexOf(r.id)===-1&&r.user!==currentUser;});
+      if(fresh.length) showToast('↩️ Nouveau bon de retour '+fresh[0].id+' — '+fresh[0].chantier+(fresh.length>1?' (+'+(fresh.length-1)+')':''));
+    }
+    retoursKnown=retoursCache.map(function(r){return r.id;});
     updateRetoursBadge();
     const m=document.getElementById('retoursListModal');
     if(m&&m.style.display==='flex') renderRetoursList();
   });
 }
+
 function retoursVisibles(){
   if(currentRole==='admin'||currentRole==='comptable') return retoursCache;
   if(currentRole==='conducteur'){ const s=mySvcs(); return retoursCache.filter(function(r){return s.indexOf(retourSvc(r))!==-1;}); }
@@ -6408,8 +6823,12 @@ function retoursVisibles(){
 
 function updateRetoursBadge(){
   const n=retoursVisibles().filter(function(r){return r.status==='pending';}).length;
-  const el=document.getElementById('retoursBadge'); if(el) el.textContent=n?'('+n+')':'';
+  const el=document.getElementById('retoursBadge'); if(el){ el.textContent=n?n:''; el.className=n?'rbadge':''; }
+  const nA=currentRole==='admin'?n:0;   // le magasin voit en permanence combien de bons de retour sont à traiter
+  const nb=document.getElementById('retoursNavBadge'); if(nb){ nb.textContent='↩️ '+nA; nb.style.display=nA>0?'inline':'none'; }
+  const bb=document.getElementById('bnavRetoursBadge'); if(bb){ bb.textContent=nA; bb.style.display=nA>0?'flex':'none'; }
 }
+
 function openRetourModal(){ startRetourMode(); }    // bouton « Nouveau bon de retour »
 function openRetourForm(){
   if(currentRole==='comptable'){showToast('Accès en lecture seule');return;}
@@ -6538,6 +6957,7 @@ function renderRetoursList(){
       +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
       +'<button onclick="printRetour(\''+r.id+'\')" style="'+bt+'background:#0077b6;">🖨️ Bon</button>'
       +(canReceive?'<button onclick="retourReceiveOpen(\''+r.id+'\')" style="'+bt+'background:#27ae60;">✅ Traitée</button>':'')
+      +(currentRole==='admin'&&r.status==='received'?'<button onclick="retourUndo(\''+r.id+'\')" style="'+bt+'background:#e67e22;">↩️ Annuler le traitement</button>':'')
       +(canDelete?'<button onclick="deleteRetour(\''+r.id+'\')" style="'+bt+'background:var(--red);">🗑️ '+(currentRole==='admin'?'Supprimer':'Annuler')+'</button>':'')
       +'</div></div>';
   }).join('');
@@ -6594,6 +7014,7 @@ function retourReceiveConfirm(){
     const stockQty=editItemSetQty(it,n).qty;           // en ml pour une barre
     const current=stockOf(it.code,svc);
     batch.set(db.collection('stock').doc(it.code),{[fld]:current+stockQty,updatedAt:now},{merge:true});
+    mvtAdd(batch,{code:it.code,nom:it.nom,service:svc,avant:current,apres:current+stockQty,type:'retour',ref:r.id});
     lignes.push({code:it.code,nom:it.nom,recu:n,stock:stockQty});
     // le réappro du chantier (et du service) baisse d'autant, dans la limite de ce qu'ils avaient pris
     const ex=reapproStockCache[it.code];
@@ -6715,35 +7136,37 @@ function confirmMarkDone(){
   // Items non en stock (décochés) → bon fournisseur
   const missingItems=order.items.filter((_,i)=>!document.getElementById('dlv_'+i)?.checked);
 
-  db.collection('orders').doc(pendingMarkDoneId).update(update)
-    .then(()=>{
-      const now=new Date().toISOString();
-      if(inStockItems.length){
-        const batch=db.batch();
-        const svc=orderSvc(order);   // le service de la commande décide du stock déduit (bleu = gros chantier, rouge = particulier)
-        inStockItems.forEach(item=>{
-          const current=stockOf(item.code,svc);
-          const newQty=Math.max(0,current-item.qty);
-          batch.set(db.collection('stock').doc(item.code),{[stockField(svc)]:newQty,updatedAt:now},{merge:true});
-          const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
-          const chantiers=Object.assign({},existing.chantiers);
-          chantiers[order.chantier]=(chantiers[order.chantier]||0)+item.qty;
-          const services=Object.assign({},reapproServices(existing.totalQty?existing:null));
-          services[svc]=(services[svc]||0)+item.qty;
-          batch.set(db.collection('reappro_stock').doc(item.code),{
-            code:item.code,nom:item.nom,
-            totalQty:existing.totalQty+item.qty,
-            chantiers:chantiers,services:services,updatedAt:now
-          });
-        });
-        batch.commit().catch(()=>{});
-      }
-      if(missingItems.length) generateBonFournisseurItems(order,missingItems);
-      showToast('Commande traitée'+(livraison?' — Livraison: '+livraison:'')+(missingItems.length?' — Bon fournisseur généré':''));
-      closeDeliveryModal();
-    })
-    .catch(()=>showToast('Erreur'));
+  const now=new Date().toISOString();
+  const svc=orderSvc(order);   // le service de la commande décide du stock déduit (bleu = gros chantier, rouge = particulier)
+  const batch=db.batch(), applied=[], agg={};
+  inStockItems.forEach(it=>{ if(!agg[it.code]) agg[it.code]={code:it.code,nom:it.nom,qty:0}; agg[it.code].qty+=it.qty; });
+  Object.values(agg).forEach(item=>{
+    const current=stockOf(item.code,svc);
+    const newQty=Math.max(0,current-item.qty);
+    batch.set(db.collection('stock').doc(item.code),{[stockField(svc)]:newQty,updatedAt:now},{merge:true});
+    mvtAdd(batch,{code:item.code,nom:item.nom,service:svc,avant:current,apres:newQty,type:'commande',ref:order.id});
+    const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
+    const chantiers=Object.assign({},existing.chantiers);
+    chantiers[order.chantier]=(chantiers[order.chantier]||0)+item.qty;
+    const services=Object.assign({},reapproServices(existing.totalQty?existing:null));
+    services[svc]=(services[svc]||0)+item.qty;
+    batch.set(db.collection('reappro_stock').doc(item.code),{
+      code:item.code,nom:item.nom,
+      totalQty:existing.totalQty+item.qty,
+      chantiers:chantiers,services:services,updatedAt:now
+    });
+    applied.push({code:item.code,nom:item.nom,deducted:current-newQty,reappro:item.qty});   // ce qui a réellement été déduit : permet d'annuler proprement
+  });
+  update.stockApplied=applied; update.stockService=svc; update.processedBy=currentUser; update.processedAt=now;
+  batch.update(db.collection('orders').doc(pendingMarkDoneId),update);
+  // tout est enregistré en une seule opération : si ça échoue, la commande reste « en attente » et rien n'est modifié
+  batch.commit().then(()=>{
+    if(missingItems.length) generateBonFournisseurItems(order,missingItems);
+    showToast('Commande traitée'+(livraison?' — Livraison: '+livraison:'')+(missingItems.length?' — Bon fournisseur généré':''));
+    closeDeliveryModal();
+  }).catch(e=>showToast((e&&e.code==='resource-exhausted')?'❌ Non enregistré : quota Firebase atteint, réessayez demain':'❌ Non enregistré : la commande reste en attente'));
 }
+
 function generateBonFournisseurItems(order, items){
   const wb=XLSX.utils.book_new();
   const byFourn={};
@@ -6773,11 +7196,19 @@ function generateBonFournisseurItems(order, items){
   XLSX.writeFile(wb,filename);
 }
 function deleteOrder(id){
-  if(!confirm('Mettre à la corbeille ?'))return;
-  db.collection('orders').doc(id).update({deleted:true, deletedAt:new Date().toISOString()})
-    .then(()=>showToast('Commande mise à la corbeille 🗑️'))
-    .catch(()=>showToast('Erreur'));
+  const o=getOrders().find(x=>x.id===id);
+  const ap=(o&&o.stockApplied)||[];
+  let msg='Mettre à la corbeille ?';
+  if(o&&o.status==='done'&&ap.length) msg='Cette commande est traitée : la mettre à la corbeille REMET aussi les stocks déduits ('+ap.length+' article(s)) et la repasse « en attente ».\n\nContinuer ?';
+  else if(o&&o.status==='done') msg+='\n\n⚠️ Commande traitée avant la mise à jour : le stock ne sera pas remis automatiquement.';
+  if(!confirm(msg))return;
+  const batch=db.batch(), upd={deleted:true, deletedAt:new Date().toISOString()};
+  if(o&&o.status==='done'&&ap.length){ undoOrderInto(batch,o,'annulation','Commande '+id+' mise à la corbeille'); Object.assign(upd,{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null}); }
+  batch.update(db.collection('orders').doc(id),upd);
+  batch.commit().then(()=>showToast('Commande mise à la corbeille 🗑️'))
+    .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
 }
+
 function renderCorbeille(){
   const el=document.getElementById('corbeilleContent');
   el.innerHTML='<p style="color:var(--muted);text-align:center;padding:20px">Chargement...</p>';
@@ -6876,13 +7307,14 @@ function renderDashboard(){
   const todayOrders=all.filter(o=>o.date.startsWith(today));
   const pending=all.filter(o=>o.status==='pending').length;
   const done=all.filter(o=>o.status==='done').length;
+  const aG=stockAlertList('gros').length, aP=stockAlertList('particulier').length;
+  const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">'+svcIcon(svc)+' Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées</div></div>`;
+    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées</div></div>`+al('gros',aG)+al('particulier',aP);
 }
 
-// Date filter
 function clearDateFilter(){
   document.getElementById('dateFrom').value='';
   document.getElementById('dateTo').value='';
@@ -6900,8 +7332,9 @@ function renderSuivi(){
     :'🏗️ Suivi par chantier';
   const grouped={};
   sortOrdersDesc(orders).forEach(o=>{
-    if(!grouped[o.chantier]) grouped[o.chantier]={orders:[],pending:0,done:0,svc:orderSvc(o)};
+    if(!grouped[o.chantier]) grouped[o.chantier]={orders:[],pending:0,done:0,svc:orderSvc(o),val:0};
     grouped[o.chantier].orders.push(o);
+    grouped[o.chantier].val+=orderValue(o).total;
     if(o.status==='pending') grouped[o.chantier].pending++;
     else grouped[o.chantier].done++;
   });
@@ -6914,7 +7347,7 @@ function renderSuivi(){
       <div class="suivi-order-row">
         <div class="suivi-order-info">
           <div><span class="suivi-order-id">${o.id}</span>${own?'':' — '+o.chef} — ${o.date}</div>
-          <div class="suivi-total">${o.items.length} réf. · ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' · '+o.comment:''}</div>
+          <div class="suivi-total">${o.items.length} réf. · ${o.items.reduce((s,i)=>s+i.qty,0)} art.${canSeeValues()?' · 💶 '+fmtEur(orderValue(o).total):''}${o.comment?' · '+o.comment:''}</div>
           ${o.dateLivraison?`<div style="color:var(--green);font-size:0.78rem;font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -6931,6 +7364,7 @@ function renderSuivi(){
         <div class="suivi-chantier-stats">
           ${data.pending>0?`<span class="suivi-badge suivi-badge-pending">⏳ ${data.pending} en attente</span>`:''}
           ${data.done>0?`<span class="suivi-badge suivi-badge-done">✅ ${data.done} traitée(s)</span>`:''}
+          ${canSeeValues()?`<span class="suivi-badge" style="background:#eef2f7;color:var(--blue)">💶 ${fmtEur(data.val)}</span>`:''}
         </div>
       </div>
       <div class="suivi-orders" id="suivi-${chantier.replace(/\s/g,'_').replace(/[^a-zA-Z0-9_]/g,'')}">
@@ -7345,6 +7779,8 @@ function confirmReception(){
       const curG=stockCache[code]||0, curP=stockCacheP[code]||0;
       batch.set(db.collection('stock').doc(code),{qty:curG+sp.gros,qtyP:curP+sp.particulier,updatedAt:now},{merge:true});
       stockCache[code]=curG+sp.gros; stockCacheP[code]=curP+sp.particulier;
+      if(sp.gros) mvtAdd(batch,{code:code,nom:a.nom,service:'gros',avant:curG,apres:curG+sp.gros,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
+      if(sp.particulier) mvtAdd(batch,{code:code,nom:a.nom,service:'particulier',avant:curP,apres:curP+sp.particulier,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
       const fourn=a.fournisseur||pendingReceptionFourn||'';
       if(!receptionsParFourn[fourn]) receptionsParFourn[fourn]=[];
       receptionsParFourn[fourn].push({code,nom:a.nom,qtyRecu,qtyCommandee,qtyReliquat:Math.max(0,qtyReliquat),batigest:a.batigest||''});
@@ -7744,10 +8180,12 @@ function printOrder(id){
 let invFilter='';
 let invCat='Toutes';
 let invShowFaible=false;
-let invSeuilAlerte=5;
+let invSeuilAlerte=(function(){var v=parseInt(localStorage.getItem('delamotte_seuil'));return isNaN(v)?5:v;})();
 let stockListener=null;
 let stockCache={};     // stock GROS CHANTIER (bleu) : champ qty
 let stockCacheP={};    // stock PARTICULIER (rouge) : champ qtyP
+let stockTrkG={}, stockTrkP={};   // articles dont le stock a déjà été saisi ou suivi (pour les alertes)
+let stockAlertToasted=false;
 let invSvc='gros';      // stock affiché dans l'inventaire
 
 // ===== DEUX STOCKS : gros chantier (qty, bleu) et particulier (qtyP, rouge) =====
@@ -7786,12 +8224,18 @@ function getStock(){return stockCache;}
 function listenStock(){
   if(stockListener) stockListener();
   stockListener=db.collection('stock').onSnapshot(snap=>{
-    stockCache={}; stockCacheP={};
-    snap.docs.forEach(d=>{const x=d.data(); stockCache[d.id]=x.qty||0; stockCacheP[d.id]=x.qtyP||0;});
+    stockCache={}; stockCacheP={}; stockTrkG={}; stockTrkP={};
+    snap.docs.forEach(d=>{const x=d.data(); stockCache[d.id]=x.qty||0; stockCacheP[d.id]=x.qtyP||0; if(x.qty!==undefined) stockTrkG[d.id]=1; if(x.qtyP!==undefined) stockTrkP[d.id]=1;});
     // Refresh inventaire if open
     if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
     // Refresh catalogue to update badges
     buildCatalogue();
+    renderDashboard();
+    if(currentRole==='admin'&&!stockAlertToasted){
+      stockAlertToasted=true;
+      const g=stockAlertList('gros').length, p=stockAlertList('particulier').length;
+      if(g+p>0) showToast('⚠️ Stock bas : '+g+' article(s) 🔵 · '+p+' article(s) 🔴');
+    }
   });
 }
 
@@ -7809,8 +8253,12 @@ function deductStockFromOrder(order){
 }
 
 function saveStockItem(code, qty, svc){
-  // merge : ne touche que le stock du service concerné (l'autre stock est conservé)
-  return db.collection('stock').doc(code).set({[stockField(svc||'gros')]:parseInt(qty)||0,updatedAt:new Date().toISOString()},{merge:true});
+  // merge : ne touche que le stock du service concerné (l'autre stock est conservé) ; le changement est inscrit au journal
+  svc=svc||'gros';
+  const nv=Math.max(0,parseInt(qty)||0), cur=stockOf(code,svc), batch=db.batch();
+  batch.set(db.collection('stock').doc(code),{[stockField(svc)]:nv,updatedAt:new Date().toISOString()},{merge:true});
+  if(nv!==cur) mvtAdd(batch,{code:code,service:svc,avant:cur,apres:nv,type:'inventaire'});
+  return batch.commit();
 }
 
 function renderInventaireBody(){
@@ -7848,6 +8296,7 @@ function invRowHtml(p){
     +'<td style="text-align:right;font-size:0.82rem">'+prix+'</td>'
     +'<td style="text-align:center">'+badge+'</td>'
     +'<td style="text-align:center;white-space:nowrap">'
+    +'<button onclick="openMvtModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Historique de cet article">📜</button>'
     +'<button onclick="openPrixModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>'
     +(isCustom?'<button onclick="openCustomRefModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button><button onclick="deleteCustomRef(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>':'')
     +'</td></tr>';
@@ -7883,9 +8332,10 @@ function renderInventaire(){
         ${cats.map(c=>`<option value="${c}" ${c===invCat?'selected':''}>${c}</option>`).join('')}
       </select>
       <div style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--muted)">
-        Alerte: <input class="inv-seuil-input" type="number" min="0" value="${invSeuilAlerte}" onchange="invSeuilAlerte=parseInt(this.value)||0;renderInventaire()">
+        Alerte: <input class="inv-seuil-input" type="number" min="0" value="${invSeuilAlerte}" onchange="invSeuilAlerte=parseInt(this.value)||0;localStorage.setItem('delamotte_seuil',invSeuilAlerte);renderInventaire();renderDashboard()">
       </div>
       <button onclick="exportStockExcel()" style="padding:8px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📥 Export stock</button>
+      <button onclick="openMvtModal()" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📜 Journal du stock</button>
       ${currentRole==='admin'?`
       <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
         🔄 Synchroniser depuis Excel
@@ -8381,6 +8831,7 @@ function resetStock(){
       batch.delete(doc.ref);count++;
       if(count%400===0){batch.commit();batch=db.batch();}
     });
+    mvtSummary(batch,'reset',count+' article(s) remis à zéro (stock gros chantier ET particulier)',[]);
     return batch.commit().then(function(){return count;});
   }).then(function(count){
     stockCache={}; stockCacheP={};
