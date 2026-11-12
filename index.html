@@ -5601,6 +5601,24 @@ function excelParseTabs(wb){
       const hk=rows[i].map(excelKey);
       if(hk.some(function(v){return v.indexOf('code')!==-1&&v.indexOf('delamotte')!==-1;})){hr=i;H=hk;}
     }
+    // page « ATELIER DLM » du classeur principal : pas de colonne « CODE DELAMOTTE » (le titre « Emplacement » est posé sur la colonne des codes)
+    let dlmLayout=false, dlmCodeCol=-1;
+    if(hr===-1&&key.indexOf('atelier dlm')===0){
+      for(let i=0;i<Math.min(15,rows.length)&&hr===-1;i++){
+        const hk=rows[i].map(excelKey);
+        if(hk.some(function(v){return v.indexOf('designation')!==-1;})&&hk.some(function(v){return v.indexOf('fournisseur')!==-1;})){hr=i;H=hk;}
+      }
+      if(hr!==-1){   // la colonne des codes = celle qui contient le plus de valeurs à 5-7 chiffres (hors désignation, fournisseur, prix, quantité)
+        let best=0;
+        H.forEach(function(v,ci){
+          if(/designation|fournisseur|prix|cout|quantite/.test(v)) return;
+          let n=0; for(let r=hr+1;r<Math.min(rows.length,hr+2001);r++){ const x=rows[r][ci]; if(x!==undefined&&/^\d{5,7}$/.test(String(x).trim().replace(/\.0+$/,''))) n++; }
+          if(n>best){best=n;dlmCodeCol=ci;}
+        });
+        if(best<3) return;
+        dlmLayout=true;
+      }
+    }
     if(hr===-1) return;
     const gc=function(v){return /(^|\s)gc(\s|$)/.test(v);};
     const col={
@@ -5614,9 +5632,11 @@ function excelParseTabs(wb){
       qGc:H.findIndex(function(v){return v.indexOf('quantite')===0&&gc(v);}),
       qLone:H.findIndex(function(v){return v.indexOf('quantite')===0&&v.indexOf('mag')===-1&&!gc(v)&&v.indexOf('cout')===-1;})
     };
+    if(dlmLayout){ col.code=dlmCodeCol; col.emp=-1; }   // page DLM : code lu dans la colonne détectée ; pas d'emplacement
     if(col.code===-1||col.nom===-1) return;
-    const colP=col.qMag!==-1?col.qMag:col.qLone;   // rouge : « QUANTITE MAG » (ou « QUANTITE » seule) = service particulier
-    const colG=col.qGc;                             // bleu : « QUANTITE GC » = service gros chantier
+    // stock : jamais lu depuis la page DLM (quantités non attribuées à un service) ; ailleurs : rouge = « QUANTITE MAG » (ou « QUANTITE » seule) = particulier, bleu = « QUANTITE GC » = gros chantier
+    const colP=dlmLayout?-1:(col.qMag!==-1?col.qMag:col.qLone);
+    const colG=dlmLayout?-1:col.qGc;
     sheets.push(sname);
     const num=function(v){const n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n;};
     const txt=function(c,r){return c===-1?'':String(r[c]===undefined?'':r[c]).replace(/[\r\n\t\u2028\u2029]+/g,' ').trim().replace(/\.0+$/,'');};
@@ -5636,6 +5656,13 @@ function excelParseTabs(wb){
 }
 // un code présent dans plusieurs onglets : on prend l'onglet de sa catégorie ; si les données divergent => conflit (ignoré)
 function excelPickEntry(entries,cat){
+  const isD=function(e){return e.key.indexOf('atelier dlm')===0;};
+  const dl=entries.filter(isD), ot=entries.filter(function(e){return !isD(e);});
+  // règle : un article qui existe dans une autre page → c'est cette autre page qui fait foi (désignation, fournisseur, prix, stock) ;
+  // la page DLM ne sert que pour les articles de la catégorie ATELIER DLM qui n'existent nulle part ailleurs
+  if(ot.length) entries=ot;
+  else if(cat===DLM_CAT) entries=dl;
+  else return {skip:true};
   if(entries.length===1) return {e:entries[0]};
   const pref=entries.filter(function(e){return EXCEL_SHEET_CAT[e.key]===cat;});
   if(pref.length===1) return {e:pref[0]};
@@ -5653,6 +5680,7 @@ function excelBuildDiff(parsed){
   items.forEach(function(p){
     const ent=parsed.byCode[p.code]; if(!ent) return;
     const pk=excelPickEntry(ent,p.cat);
+    if(pk.skip) return;
     if(pk.conflict){D.conflits.push(p.code);return;}
     chosen[p.code]=pk.e; D.lus++;
   });
