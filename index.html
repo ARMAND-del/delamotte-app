@@ -430,6 +430,7 @@ const db = firebase.firestore();
         <button onclick="clearDateFilter()" style="padding:6px 12px;border:2px solid var(--border);border-radius:8px;background:var(--white);font-size:0.82rem;cursor:pointer;">✕ Effacer</button>
       </div>
       <div id="ordersList"></div>
+    <div id="olderOrdersBox" style="display:none;text-align:center;margin:14px 0;"><button class="btn-print" onclick="loadOlderOrders()">📅 Afficher les commandes de plus de 35 jours</button><div style="font-size:0.72rem;color:var(--muted);margin-top:4px">Les commandes récentes et toutes celles en attente sont déjà affichées.</div></div>
     </div>
     <div id="tabUsers" style="display:none">
       <div class="user-form" id="userForm">
@@ -5025,11 +5026,19 @@ emailjs.init(EMAILJS_PUBLIC_KEY);
 function doLogin(){
   const u=document.getElementById('loginUser').value.trim();
   const p=document.getElementById('loginPass').value.trim();
-  if(USERS[u]&&USERS[u].pass===p){
-    startSession(u);
-  } else {
-    document.getElementById('loginError').style.display='block';
+  const okLogin=function(){ return USERS[u]&&USERS[u].pass===p; };
+  const fail=function(){ document.getElementById('loginError').style.display='block'; };
+  const finish=function(){ if(okLogin()) startSession(u); else fail(); };
+  if(okLogin()){
+    // la copie locale accepte : on vérifie ce compte précis auprès de la base (1 seule lecture) pour que mot de passe, rôle et droits soient à jour
+    db.collection('users').doc(u).get().then(function(doc){
+      if(doc.exists){ USERS[u]=doc.data(); const ex=getExtraUsers(); ex[u]=doc.data(); saveExtraUsers(ex); }
+      else if(BASE_USER_NAMES.indexOf(u)===-1){ delete USERS[u]; const ex=getExtraUsers(); delete ex[u]; saveExtraUsers(ex); }   // compte supprimé : refusé tout de suite
+    }).catch(function(){}).then(finish);   // base injoignable ou quota atteint : on garde la copie locale
+    return;
   }
+  // la copie locale refuse : on relit les comptes une fois (nouveau compte, mot de passe changé) avant de refuser
+  usersRefresh().catch(function(){}).then(finish);
 }
 function startSession(u){
   resetRetourMode();
@@ -5083,12 +5092,13 @@ function startSession(u){
 
   renderOrders(); renderDashboard(); updateOrdersBadge();
   if(currentRole==='admin') checkNewOrders();
-  listenUsers();
+  if(currentRole==='admin') listenUsers();   // les autres rôles utilisent la copie locale des comptes
   listenChantiers();
+  if(currentRole==='admin') ensureChantiersDoc();
   listenOrders();
-  listenStock();
+  if(currentRole==='admin') ensureStockDoc().then(listenStock);   // les stocks ne sont lus que par l'admin
   if(perms.reappro) listenReapproCommande();
-  listenReapproStock();
+  if(perms.reappro) listenReapproStock();
   loadRefsFournFromFirebase();
   loadEmplacementsFromFirebase();
   favLoad();
@@ -5292,28 +5302,45 @@ function addChantier(){
     .then(()=>{
       document.getElementById('newChantierName').value='';
       document.getElementById('newChantierConducteur').value='';
-      showToast('Chantier ajouté ✅');
+      showToast('Chantier ajouté ✅'); chantiersPublish();
     })
     .catch(()=>showToast('Erreur lors de l\'ajout'));
 }
 function deleteChantier(name){
   if(!confirm(`Supprimer le chantier "${name}" ?`))return;
   db.collection('chantiers').doc(name).delete()
-    .then(()=>showToast('Chantier supprimé'))
+    .then(()=>{showToast('Chantier supprimé'); chantiersPublish();})
     .catch(()=>showToast('Erreur lors de la suppression'));
 }
+let chantiersLegacyUnsub=null;
+function applyChantiers(list){
+  localStorage.setItem('delamotte_chantiers',JSON.stringify(list.map(c=>c.name)));
+  localStorage.setItem('delamotte_chantiers_full',JSON.stringify(list));
+  renderChantiers();
+  updateChantierSelect();
+  pickerSetOptions('ret');
+  renderChantiersTabList();
+  updateConducteurSelect();
+}
+// la liste des chantiers est lue en UNE seule ligne (config/chantiers_all), mise à jour à chaque ajout / modification / suppression
 function listenChantiers(){
-  db.collection('chantiers').orderBy('name').onSnapshot(snap=>{
-    const list=snap.docs.map(d=>d.data());
-    localStorage.setItem('delamotte_chantiers',JSON.stringify(list.map(c=>c.name)));
-    localStorage.setItem('delamotte_chantiers_full',JSON.stringify(list));
-    renderChantiers();
-    updateChantierSelect();
-    pickerSetOptions('ret');
-    renderChantiersTabList();
-    updateConducteurSelect();
+  db.collection('config').doc('chantiers_all').onSnapshot(doc=>{
+    if(doc.exists){
+      if(chantiersLegacyUnsub){chantiersLegacyUnsub();chantiersLegacyUnsub=null;}
+      applyChantiers(doc.data().list||[]);
+    }else if(!chantiersLegacyUnsub){   // tant que la ligne regroupée n'existe pas (avant le premier passage de l'admin) : ancienne lecture
+      chantiersLegacyUnsub=db.collection('chantiers').orderBy('name').onSnapshot(snap=>applyChantiers(snap.docs.map(d=>d.data())));
+    }
   });
 }
+function chantiersPublish(){
+  return db.collection('chantiers').get().then(function(snap){
+    const list=snap.docs.map(function(d){return d.data();}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'fr',{numeric:true});});
+    return db.collection('config').doc('chantiers_all').set({list:list,updatedAt:new Date().toISOString()});
+  }).catch(function(){});
+}
+function ensureChantiersDoc(){ return db.collection('config').doc('chantiers_all').get().then(function(d){ if(!d.exists) return chantiersPublish(); }).catch(function(){}); }
+
 function getChantiersFull(){try{return JSON.parse(localStorage.getItem('delamotte_chantiers_full')||'[]');}catch{return[];}}
 function updateConducteurSelect(){
   const sel=document.getElementById('newChantierConducteur');
@@ -5367,7 +5394,7 @@ function saveEditChantier(){
   if(!name)return;
   db.collection('chantiers').doc(name).update({conducteur})
     .then(()=>{
-      showToast('Conducteur mis à jour ✅');
+      showToast('Conducteur mis à jour ✅'); chantiersPublish();
       document.getElementById('newChantierName').value='';
       document.getElementById('newChantierName').disabled=false;
       document.getElementById('editChantierOrig').value='';
@@ -5496,6 +5523,7 @@ document.getElementById('loginUser').addEventListener('keydown',e=>{if(e.key==='
 
 function doLogout(){
   resetRetourMode();
+  stopOrderListeners(); if(stockListener){stockListener();stockListener=null;}
   currentUser=null;currentRole=null;cart=[];
   localStorage.removeItem('delamotte_session');
   document.getElementById('loginScreen').style.display='flex';
@@ -5504,6 +5532,9 @@ function doLogout(){
   document.getElementById('loginPass').value='';
   document.getElementById('loginError').style.display='none';
 }
+// comptes de base écrits dans le code (jamais retirés lors d'une mise à jour des comptes)
+const BASE_USER_NAMES=Object.keys(USERS);
+function usersPrune(ids){ Object.keys(USERS).forEach(function(n){ if(BASE_USER_NAMES.indexOf(n)===-1&&ids.indexOf(n)===-1) delete USERS[n]; }); }   // retire les comptes supprimés
 // Load extra users saved in localStorage
 (function(){const e=JSON.parse(localStorage.getItem('delamotte_extra_users')||'{}');Object.assign(USERS,e);})();
 
@@ -5511,11 +5542,25 @@ function doLogout(){
 (function(){if(localStorage.getItem('delamotte_dark')==='1'){document.documentElement.classList.add('dark');}})();
 
 // Splash + session restore — load Firebase users first
+// comptes : copie gardée 6 h sur l'appareil (évite de relire tous les comptes à chaque ouverture)
+const USERS_TTL=6*3600*1000;
+function usersCacheFresh(){ return Object.keys(getExtraUsers()).length>0 && (Date.now()-parseInt(localStorage.getItem('delamotte_users_t')||'0'))<USERS_TTL; }
+function usersRefresh(){
+  return db.collection('users').get().then(function(snap){
+    snap.docs.forEach(function(d){USERS[d.id]=d.data();});
+    usersPrune(snap.docs.map(function(d){return d.id;}));
+    saveExtraUsers(Object.fromEntries(snap.docs.map(function(d){return [d.id,d.data()];})));
+    localStorage.setItem('delamotte_users_t',String(Date.now()));
+  });
+}
 window.addEventListener('DOMContentLoaded', function(){
   initDark();
-  db.collection('users').get().then(snap=>{
+  (usersCacheFresh()?Promise.resolve(null):db.collection('users').get()).then(snap=>{
+    if(!snap) return;
+    localStorage.setItem('delamotte_users_t',String(Date.now()));
     // Load existing Firebase users
     snap.docs.forEach(d=>{USERS[d.id]=d.data();});
+    usersPrune(snap.docs.map(d=>d.id));
     saveExtraUsers(Object.fromEntries(snap.docs.map(d=>[d.id,d.data()])));
     // Push base USERS to Firebase if they don't exist yet (first run)
     const batch=db.batch();
@@ -5573,14 +5618,14 @@ function addChantiersPart(){
   const now=new Date().toISOString(), batch=db.batch();
   nouveaux.forEach(function(n){batch.set(db.collection('chantiers').doc(n),{name:n,service:'particulier',conducteur:'',createdAt:now,createdBy:currentUser});});
   batch.commit().then(function(){
-    ta.value='';
+    ta.value=''; chantiersPublish();
     showToast('✅ '+nouveaux.length+' chantier(s) ajouté(s)'+(names.length>nouveaux.length?' · '+(names.length-nouveaux.length)+' déjà existant(s) ignoré(s)':''));
   }).catch(function(e){showToast('❌ Non enregistré'+((e&&e.code)?' ('+e.code+')':''));});
 }
 function deleteChantierPart(name){
   if(!canManagePartChantiers()||chantierSvcByName(name)!=='particulier'){showToast('Action non autorisée');return;}
   if(!confirm('Supprimer le chantier "'+name+'" ?\nLes commandes déjà passées restent visibles.')) return;
-  db.collection('chantiers').doc(name).delete().then(function(){showToast('Chantier supprimé');}).catch(function(){showToast('Erreur lors de la suppression');});
+  db.collection('chantiers').doc(name).delete().then(function(){showToast('Chantier supprimé'); chantiersPublish();}).catch(function(){showToast('Erreur lors de la suppression');});
 }
 // ===== SYNCHRONISATION DEPUIS EXCEL (onglets par catégorie, jamais la feuille 'reference') =====
 const EXCEL_SKIP=['catalogue','cse','secours','presentation','nom','contact','feuille commande','stock total','chantier','cmd avec prix','commande','reference','radiateur','fumisterie','sanitaire'];
@@ -5778,8 +5823,13 @@ function excelSyncApply(){
   const on=function(id){const e=document.getElementById('xs_'+id);return !!e&&e.checked;};
   const ops=[], refsPatch={}, empPatch={}, n={};
   if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
-  if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qty:x.qty,updatedAt:now},{merge:true});});}); }
-  if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){ops.push(function(b){b.set(db.collection('stock').doc(x.code),{qtyP:x.qty,updatedAt:now},{merge:true});});}); }
+  const stockItems={};   // tous les changements de stock dans UNE seule écriture
+  if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){(stockItems[x.code]=stockItems[x.code]||{}).qty=x.qty;}); }
+  if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){(stockItems[x.code]=stockItems[x.code]||{}).qtyP=x.qty;}); }
+  if(Object.keys(stockItems).length){
+    if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); return; }
+    ops.push(function(b){b.set(STOCK_DOC(),{items:stockItems},{merge:true});});
+  }
   if(n.stockG||n.stockP){
     const det=[]; if(n.stockG) D.stockG.forEach(function(x){det.push({code:x.code,s:'gros',a:x.old,b:x.qty});}); if(n.stockP) D.stockP.forEach(function(x){det.push({code:x.code,s:'particulier',a:x.old,b:x.qty});});
     ops.push(function(b){mvtSummary(b,'synchro','Synchronisation Excel : '+(n.stockG||0)+' stock(s) 🔵 et '+(n.stockP||0)+' stock(s) 🔴 remplacés par les valeurs du fichier',det);});
@@ -5954,7 +6004,7 @@ function undoOrderInto(batch,o,type,comment){
   const ap=o.stockApplied||[], svc=o.stockService||orderSvc(o), now=new Date().toISOString();
   ap.forEach(function(a){
     const cur=stockOf(a.code,svc), nv=cur+(a.deducted||0);
-    batch.set(db.collection('stock').doc(a.code),{[stockField(svc)]:nv,updatedAt:now},{merge:true});
+    stockPatch(batch,a.code,{[stockField(svc)]:nv});
     mvtAdd(batch,{code:a.code,nom:a.nom,service:svc,avant:cur,apres:nv,type:type,ref:o.id,comment:comment});
     const ex=reapproStockCache[a.code];
     if(ex&&ex.totalQty>0){
@@ -5979,7 +6029,7 @@ function retourUndo(id){
   const batch=db.batch(), now=new Date().toISOString();
   lignes.forEach(function(l){
     const cur=stockOf(l.code,svc), nv=Math.max(0,cur-(l.stock||0));
-    batch.set(db.collection('stock').doc(l.code),{[stockField(svc)]:nv,updatedAt:now},{merge:true});
+    stockPatch(batch,l.code,{[stockField(svc)]:nv});
     mvtAdd(batch,{code:l.code,nom:l.nom,service:svc,avant:cur,apres:nv,type:'annulretour',ref:id,comment:'Traitement du bon annulé'});
   });
   (r.reapproAjuste||[]).forEach(function(x){
@@ -6025,7 +6075,7 @@ function downloadBlob(name,text,mime){
   a.href=url; a.download=name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(url);},4000);
 }
 function backupCollect(){
-  const names=['orders','retours','users','chantiers','stock','reappro_stock','reappro_commande','historique_commandes','custom_refs','custom_names','stock_mouvements','meta','config'];
+  const names=['orders','retours','users','chantiers','reappro_stock','reappro_commande','historique_commandes','custom_refs','custom_names','stock_mouvements','meta','config'];
   return Promise.all(names.map(function(n){return db.collection(n).get().then(function(s){return [n,s.docs.map(function(d){return Object.assign({_id:d.id},d.data());})];});}))
     .then(function(arr){const o={}; arr.forEach(function(x){o[x[0]]=x[1];}); return o;});
 }
@@ -6136,7 +6186,8 @@ function costCompute(){
   return {range:R,nb:orders.length,total:total,svc:svcTot,rows:rows,months:Object.keys(months).sort().map(function(k){return {k:k,gros:months[k].gros,particulier:months[k].particulier};}),
     arts:Object.values(arts).sort(function(a,b){return b.cost-a.cost;}).slice(0,10),noPrice:{lines:noPrice.lines,codes:Object.keys(noPrice.codes)}};
 }
-function costSet(k,v){ costF[k]=v; renderCostSection(); }
+function costEnsure(){ return costF.period==='month'?Promise.resolve():ensureAllOrders(); }   // « Ce mois » est déjà couvert par la fenêtre de 35 jours
+function costSet(k,v){ costF[k]=v; costEnsure().then(renderCostSection); }
 function costToggle(i){ const el=document.getElementById('costDet_'+i); if(el) el.style.display=el.style.display==='none'?'table-row':'none'; }
 function renderCostSection(){
   const el=document.getElementById('costSection'); if(!el) return;
@@ -6216,12 +6267,12 @@ function showTab(tab){
   if(tab==='orders') renderOrders();
   if(tab==='users'){renderUsers();renderChantiers();}
   if(tab==='suivi') renderSuivi();
-  if(tab==='stats') renderStats();
+  if(tab==='stats') ensureAllOrders().then(renderStats);
   if(tab==='corbeille') renderCorbeille();
   if(tab==='inventaire') renderInventaire();
   if(tab==='reappro') renderReappro();
   if(tab==='chantiers') renderChantiersTab();
-  if(tab==='couts') renderCostSection();
+  if(tab==='couts') costEnsure().then(renderCostSection);
 }
 function setBnav(tab){
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
@@ -6626,14 +6677,51 @@ function sendOrder(){
 
 function getOrders(){try{return JSON.parse(localStorage.getItem('delamotte_orders')||'[]');}catch{return[];}}
 function saveOrders(o){localStorage.setItem('delamotte_orders',JSON.stringify(o));}
+// rôles qui ne voient que leurs propres commandes / bons de retour : on ne charge que ceux-là (beaucoup moins de lectures)
+function ownDataOnly(){ return currentRole==='chef'||currentRole==='particulier'||currentRole==='atelier'; }
+// ===== LECTURES ÉCONOMES (forfait gratuit Firebase : 50 000 lectures par jour) =====
+// On ne charge que les commandes des 35 derniers jours + toutes les commandes en attente ; l'historique complet se charge à la demande.
+const ORDERS_WINDOW_DAYS=35;
+let ordersRec=[], ordersPen=[], ordersOlder=[], ordersUnsubs=[], ordersOlderUnsub=null, ordersAllLoaded=false;
+function ordersCutoff(){ return new Date(Date.now()-ORDERS_WINDOW_DAYS*86400000).toISOString(); }
+function stopOrderListeners(){
+  ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
+  if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
+  ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false;
+}
+function ordersMerge(){
+  const m={}; ordersOlder.concat(ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
+  const orders=Object.values(m).filter(function(o){return !o.deleted;}).sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
+  localStorage.setItem('delamotte_orders',JSON.stringify(orders));
+  renderOrders();updateOrdersBadge();renderDashboard();
+  if(currentCat===FAV_CAT) filterProducts();   // « souvent commandés » suit les nouvelles commandes
+}
 function listenOrders(){
-  db.collection('orders').orderBy('createdAt','desc').onSnapshot(snap=>{
-    const orders=snap.docs.map(d=>d.data()).filter(o=>!o.deleted);
-    localStorage.setItem('delamotte_orders',JSON.stringify(orders));
-    renderOrders();updateOrdersBadge();renderDashboard();
-    if(currentCat===FAV_CAT) filterProducts();   // « souvent commandés » suit les nouvelles commandes
+  stopOrderListeners();
+  const cut=ordersCutoff();
+  const sub=function(q,assign,onErr){ return q.onSnapshot(function(snap){ assign(snap.docs.map(function(d){return d.data();})); ordersMerge(); },onErr||function(){}); };
+  if(ownDataOnly()){
+    const base=db.collection('orders').where('user','==',currentUser);
+    // récentes : nécessite un index composite (user + createdAt) ; tant qu'il n'existe pas, repli sur toutes les commandes de l'utilisateur
+    ordersUnsubs.push(sub(base.where('createdAt','>=',cut),function(a){ordersRec=a;},function(){ ordersUnsubs.push(sub(base,function(a){ordersRec=a;})); }));
+    ordersUnsubs.push(sub(base.where('status','==','pending'),function(a){ordersPen=a;}));
+  }else{
+    ordersUnsubs.push(sub(db.collection('orders').where('createdAt','>=',cut).orderBy('createdAt','desc'),function(a){ordersRec=a;}));
+    ordersUnsubs.push(sub(db.collection('orders').where('status','==','pending'),function(a){ordersPen=a;}));
+  }
+}
+// charge l'historique complet (une seule fois par session) : statistiques, exports, anciennes commandes
+function ensureAllOrders(){
+  if(ordersAllLoaded) return Promise.resolve();
+  ordersAllLoaded=true;
+  return new Promise(function(res){
+    const q=ownDataOnly()?db.collection('orders').where('user','==',currentUser):db.collection('orders').where('createdAt','<',ordersCutoff());
+    let first=true;
+    ordersOlderUnsub=q.onSnapshot(function(snap){ ordersOlder=snap.docs.map(function(d){return d.data();}); ordersMerge(); updateOlderBox(); if(first){first=false;res();} },function(){ res(); });
   });
 }
+function updateOlderBox(){ const b=document.getElementById('olderOrdersBox'); if(b) b.style.display=ordersAllLoaded?'none':'block'; }
+function loadOlderOrders(){ showToast('Chargement de l\'historique...'); ensureAllOrders().then(function(){ updateOlderBox(); showToast('✅ Historique complet chargé'); }); }
 // Règles de visibilité :
 //  - admin et comptable : toutes les commandes
 //  - conducteur : toutes les commandes de SON service (gros chantier OU 001 Particulier), jamais celles de l'autre service
@@ -6652,6 +6740,7 @@ function sortOrdersDesc(list){
 }
 
 function renderOrders(){
+  updateOlderBox();
   const all=getOrders();
   const vis=getVisibleOrders(all);
   const pending=vis.filter(o=>o.status==='pending').length;
@@ -6905,7 +6994,7 @@ let retourReceiveState=null;   // {qty:[...], bad:{}}
 let retoursKnown=null;
 function listenRetours(){
   retoursKnown=null;
-  db.collection('retours').onSnapshot(function(snap){
+  (ownDataOnly()?db.collection('retours').where('user','==',currentUser):db.collection('retours')).onSnapshot(function(snap){
     retoursCache=snap.docs.map(function(d){return d.data();}).filter(function(r){return !r.deleted;});
     retoursCache.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
     // alerte du magasin : un nouveau bon de retour vient d'arriver (jamais au premier chargement)
@@ -7118,7 +7207,7 @@ function retourReceiveConfirm(){
     if(!(n>0)) return;
     const stockQty=editItemSetQty(it,n).qty;           // en ml pour une barre
     const current=stockOf(it.code,svc);
-    batch.set(db.collection('stock').doc(it.code),{[fld]:current+stockQty,updatedAt:now},{merge:true});
+    stockPatch(batch,it.code,{[fld]:current+stockQty});
     mvtAdd(batch,{code:it.code,nom:it.nom,service:svc,avant:current,apres:current+stockQty,type:'retour',ref:r.id});
     lignes.push({code:it.code,nom:it.nom,recu:n,stock:stockQty});
     // le réappro du chantier (et du service) baisse d'autant, dans la limite de ce qu'ils avaient pris
@@ -7248,7 +7337,7 @@ function confirmMarkDone(){
   Object.values(agg).forEach(item=>{
     const current=stockOf(item.code,svc);
     const newQty=Math.max(0,current-item.qty);
-    batch.set(db.collection('stock').doc(item.code),{[stockField(svc)]:newQty,updatedAt:now},{merge:true});
+    stockPatch(batch,item.code,{[stockField(svc)]:newQty});
     mvtAdd(batch,{code:item.code,nom:item.nom,service:svc,avant:current,apres:newQty,type:'commande',ref:order.id});
     const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
     const chantiers=Object.assign({},existing.chantiers);
@@ -7317,7 +7406,7 @@ function deleteOrder(id){
 function renderCorbeille(){
   const el=document.getElementById('corbeilleContent');
   el.innerHTML='<p style="color:var(--muted);text-align:center;padding:20px">Chargement...</p>';
-  db.collection('orders').get()
+  db.collection('orders').where('deleted','==',true).get()
     .then(snap=>{
       const deleted=snap.docs.map(d=>d.data()).filter(o=>o.deleted===true)
         .sort((a,b)=>(b.deletedAt||'').localeCompare(a.deletedAt||''));
@@ -7883,7 +7972,7 @@ function confirmReception(){
     if(qtyRecu>0){
       const sp=splitReception(qtyRecu,reapproStockCache[code]);   // réparti selon le besoin de chaque service
       const curG=stockCache[code]||0, curP=stockCacheP[code]||0;
-      batch.set(db.collection('stock').doc(code),{qty:curG+sp.gros,qtyP:curP+sp.particulier,updatedAt:now},{merge:true});
+      stockPatch(batch,code,{qty:curG+sp.gros,qtyP:curP+sp.particulier});
       stockCache[code]=curG+sp.gros; stockCacheP[code]=curP+sp.particulier;
       if(sp.gros) mvtAdd(batch,{code:code,nom:a.nom,service:'gros',avant:curG,apres:curG+sp.gros,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
       if(sp.particulier) mvtAdd(batch,{code:code,nom:a.nom,service:'particulier',avant:curP,apres:curP+sp.particulier,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
@@ -8010,7 +8099,8 @@ function openBatigestModal(){
 function closeBatigestModal(){
   document.getElementById('batigestModal').style.display='none';
 }
-function exportBatigest(){
+function exportBatigest(){ const a=arguments; return ensureAllOrders().then(function(){return exportBatigestNow.apply(null,a);}); }
+function exportBatigestNow(){
   const numero=document.getElementById('batigestNumero').value.trim();
   const dateFrom=document.getElementById('batigestFrom').value;
   const dateTo=document.getElementById('batigestTo').value;
@@ -8129,7 +8219,8 @@ function exportBatigest(){
   showToast(`Export Batigest généré ✅ (${Object.keys(byFourn).length} fournisseurs)`);
 }
 
-function exportExcel(){
+function exportExcel(){ return ensureAllOrders().then(exportExcelNow); }
+function exportExcelNow(){
   const all=getOrders();
   if(!all.length){showToast('Aucune commande à exporter');return;}
   // Build CSV
@@ -8327,11 +8418,31 @@ function splitText(sp){
 }
 function getStock(){return stockCache;}
 
+// ===== STOCK : toutes les quantités dans UNE seule ligne (config/stock_all) au lieu d'une ligne par article =====
+function STOCK_DOC(){ return db.collection('config').doc('stock_all'); }
+let stockDocReady=false;
+function stockPatch(batch,code,fields){
+  if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); throw new Error('stock-not-ready'); }
+  batch.set(STOCK_DOC(),{items:{[code]:fields}},{merge:true});
+}
+// reprise des anciens stocks (une ligne par article) vers la ligne regroupée : une seule fois
+function ensureStockDoc(){
+  return STOCK_DOC().get().then(function(doc){
+    if(doc.exists){ stockDocReady=true; return; }
+    return db.collection('stock').get().then(function(snap){
+      const items={};
+      snap.docs.forEach(function(d){const x=d.data(), o={}; if(x.qty!==undefined) o.qty=x.qty; if(x.qtyP!==undefined) o.qtyP=x.qtyP; items[d.id]=o;});
+      return STOCK_DOC().set({items:items,migratedAt:new Date().toISOString()}).then(function(){stockDocReady=true;});
+    });
+  }).catch(function(){});
+}
 function listenStock(){
   if(stockListener) stockListener();
-  stockListener=db.collection('stock').onSnapshot(snap=>{
+  stockListener=STOCK_DOC().onSnapshot(doc=>{
     stockCache={}; stockCacheP={}; stockTrkG={}; stockTrkP={};
-    snap.docs.forEach(d=>{const x=d.data(); stockCache[d.id]=x.qty||0; stockCacheP[d.id]=x.qtyP||0; if(x.qty!==undefined) stockTrkG[d.id]=1; if(x.qtyP!==undefined) stockTrkP[d.id]=1;});
+    const items=doc.exists?(doc.data().items||{}):{};
+    Object.keys(items).forEach(code=>{const x=items[code]; stockCache[code]=x.qty||0; stockCacheP[code]=x.qtyP||0; if(x.qty!==undefined) stockTrkG[code]=1; if(x.qtyP!==undefined) stockTrkP[code]=1;});
+    if(doc.exists) stockDocReady=true;
     // Refresh inventaire if open
     if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
     // Refresh catalogue to update badges
@@ -8344,7 +8455,6 @@ function listenStock(){
     }
   });
 }
-
 function deductStockFromOrder(order){
   if(!order||!order.items) return;
   const batch=db.batch();
@@ -8362,7 +8472,7 @@ function saveStockItem(code, qty, svc){
   // merge : ne touche que le stock du service concerné (l'autre stock est conservé) ; le changement est inscrit au journal
   svc=svc||'gros';
   const nv=Math.max(0,parseInt(qty)||0), cur=stockOf(code,svc), batch=db.batch();
-  batch.set(db.collection('stock').doc(code),{[stockField(svc)]:nv,updatedAt:new Date().toISOString()},{merge:true});
+  stockPatch(batch,code,{[stockField(svc)]:nv});
   if(nv!==cur) mvtAdd(batch,{code:code,service:svc,avant:cur,apres:nv,type:'inventaire'});
   return batch.commit();
 }
@@ -8931,21 +9041,16 @@ function importStockGC(event){
 
 function resetStock(){
   if(!confirm('Réinitialiser TOUT le stock à 0 (gros chantier ET particulier) ?\nCette action est irréversible.'))return;
-  db.collection('stock').get().then(function(snap){
-    var batch=db.batch();var count=0;
-    snap.docs.forEach(function(doc){
-      batch.delete(doc.ref);count++;
-      if(count%400===0){batch.commit();batch=db.batch();}
-    });
-    mvtSummary(batch,'reset',count+' article(s) remis à zéro (stock gros chantier ET particulier)',[]);
-    return batch.commit().then(function(){return count;});
-  }).then(function(count){
-    stockCache={}; stockCacheP={};
+  if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); return; }
+  const count=Object.keys(stockCache).length, batch=db.batch();
+  batch.set(STOCK_DOC(),{items:{},resetAt:new Date().toISOString()});
+  mvtSummary(batch,'reset',count+' article(s) remis à zéro (stock gros chantier ET particulier)',[]);
+  batch.commit().then(function(){
+    stockCache={}; stockCacheP={}; stockTrkG={}; stockTrkP={};
     showToast('✅ Stock réinitialisé ('+count+' articles)');
     renderInventaire();
   }).catch(function(){showToast('❌ Erreur Firebase');});
 }
-
 function updateReliquatPreview(i,qtyCmd){
   var input=document.getElementById('rec_'+i);
   var preview=document.getElementById('reliquat_'+i);
