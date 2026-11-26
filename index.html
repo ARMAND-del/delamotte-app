@@ -324,6 +324,9 @@ const db = firebase.firestore();
   .dark-toggle{background:rgba(255,255,255,0.15);border:none;color:var(--white);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:1rem;}
   /* NOTIFICATION BADGE */
   .nav-tab{position:relative;}
+  .search-mic{background:none;border:none;font-size:1.25rem;cursor:pointer;padding:4px 8px;}
+  .search-mic.rec{color:var(--red);animation:micpulse 1s infinite;}
+  @keyframes micpulse{0%{transform:scale(1)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
   .done-new-tag{background:#27ae60;color:#fff;border-radius:10px;padding:2px 8px;font-size:0.7rem;font-weight:800;margin-right:6px;}
   .cmt-prev{background:var(--gray);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:0.78rem;cursor:pointer;border-left:3px solid var(--blue);}
   .cmt-prev.new{border-left-color:var(--orange);background:#fff3cd;color:#856404;}
@@ -409,6 +412,7 @@ const db = firebase.firestore();
       <button class="btn-logout" onclick="doLogout()">&#8592;</button>
     </div>
   </div>
+  <div id="offlineBar" style="display:none;background:#fdecea;color:#c0392b;text-align:center;padding:8px 12px;font-size:0.82rem;font-weight:700;">📶 Pas de réseau — vos commandes sont gardées et partiront dès le retour du réseau</div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-nav="catalogue" onclick="showTab('catalogue')">&#128230; Catalogue</button>
     <button class="nav-tab" data-nav="orders" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span><span id="commentsNavBadge" title="Nouveaux messages" style="display:none;background:#2980b9;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">💬 0</span><span id="doneNavBadge" title="Commandes traitées" style="display:none;background:#27ae60;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">✅ 0</span></button>
@@ -428,6 +432,7 @@ const db = firebase.firestore();
       <div class="search-bar">
         <span>&#128269;</span>
         <input type="text" id="searchInput" placeholder="Rechercher par code ou designation..." oninput="filterProducts();toggleClearBtn()">
+        <button type="button" class="search-mic" id="micBtn" onclick="voiceSearch()" title="Dicter la recherche" style="display:none">&#127908;</button>
         <button class="search-clear" id="searchClear" onclick="clearSearch()">&#10005;</button>
       </div>
       <div id="searchCount" class="search-count"></div>
@@ -439,6 +444,8 @@ const db = firebase.firestore();
         <button onclick="openRetourModal()" style="padding:9px 14px;background:#e67e22;color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">↩️ Nouveau bon de retour</button>
         <button onclick="openRetoursList()" style="padding:9px 14px;background:var(--white);color:var(--text);border:2px solid var(--border);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📋 Bons de retour <span id="retoursBadge"></span></button>
       </div>
+      <div id="outboxBox" style="display:none"></div>
+      <div id="lateBar" style="display:none"></div>
       <div id="notifBar" style="display:none"></div>
       <div class="stats-bar" id="statsBar"></div>
       <div class="filter-bar" id="filterBar"></div>
@@ -5147,7 +5154,9 @@ function startSession(u){
   listenRetours();
   // Restore saved cart
   setTimeout(loadCart, 800);
-  doneInit();
+  doneInit(); outboxUpdateUI(); voiceInit(); setTimeout(outboxFlush,1500);
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}   // demande au téléphone de ne pas effacer les commandes en attente
+  setTimeout(function(){ const n=outboxGet().filter(function(p){return p.user===currentUser;}).length; if(n) showToast('📶 '+n+' commande'+(n>1?'s':'')+' en attente d\'envoi : '+(n>1?'elles partiront':'elle partira')+' dès que le réseau revient'); },2500);
   if(currentRole==='admin'&&artInvWindow(new Date())) setTimeout(function(){ showToast('📅 Inventaire du 30/09 : pensez à figer le stock (Stock → Bilan & articles → Arrêtés)'); },2500);
 }
 function getExtraUsers(){try{return JSON.parse(localStorage.getItem('delamotte_extra_users')||'{}');}catch{return{};}}
@@ -6376,6 +6385,24 @@ function notifBarRender(){
   if(ok) el.innerHTML='<div style="background:#e8f4fd;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:0.82rem"><span>🔔 Être prévenu quand une commande est traitée ou qu\'un message arrive</span><button class="btn-print" style="background:var(--blue)" onclick="notifEnable()">Activer</button></div>';
 }
 function notifEnable(){ try{ Notification.requestPermission().then(function(p){ notifBarRender(); showToast(p==='granted'?'🔔 Notifications activées':'Notifications non activées'); }); }catch(e){} }
+// ===== RESTE À RECEVOIR : alerte au bout de 7 jours (rouge sur la commande, bandeau, filtre « À relancer », carte admin, message du jour) =====
+const RESTE_ALERT_DAYS=7;
+function resteDays(o){ const t=Date.parse((o&&(o.processedAt||o.createdAt))||''); return isNaN(t)?0:Math.floor((Date.now()-t)/86400000); }
+function resteLate(o){ return !!o&&!o.deleted&&(o.reste||[]).length>0&&resteDays(o)>=RESTE_ALERT_DAYS; }
+function resteLateList(){ return (currentRole==='comptable'||!currentUser)?[]:getVisibleOrders(getOrders()).filter(resteLate); }
+function lateBarRender(){
+  const el=document.getElementById('lateBar'); if(!el) return;
+  const n=resteLateList().length;
+  el.style.display=n?'block':'none';
+  el.innerHTML=n?'<div style="background:#fdecea;color:#c0392b;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:0.82rem;font-weight:700"><span>⚠️ '+n+' commande'+(n>1?'s':'')+' avec du matériel à recevoir depuis plus de '+RESTE_ALERT_DAYS+' jours</span><button class="btn-print" style="background:#c0392b" onclick="setFilter(\'late\')">Voir</button></div>':'';
+}
+function resteDailyAlert(){
+  const n=resteLateList().length; if(!n) return;
+  const key='delamotte_lateAlert_'+currentUser, today=new Date().toISOString().slice(0,10);
+  try{ if(localStorage.getItem(key)===today) return; localStorage.setItem(key,today); }catch(e){}
+  showToast('⏳ '+n+' commande'+(n>1?'s':'')+' : matériel à recevoir depuis plus de '+RESTE_ALERT_DAYS+' jours'+(currentRole==='admin'?' — pensez à relancer les fournisseurs':' — cliquez « Reçu » si c\'est arrivé'));
+}
+let hasResteFixed={};
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -6436,6 +6463,8 @@ function commonGenericName(allNoms){
   }
   return genericRaw.trim()||firstName;
 }
+// recherche par mots : chaque mot saisi doit se retrouver (code ou désignation), dans n'importe quel ordre
+function wordMatch(q,hay){ const w=String(q||'').split(' ').filter(Boolean); return !w.length||w.every(function(x){return hay.indexOf(x)!==-1;}); }
 function filterProducts(){
   const q=normTxt(document.getElementById('searchInput').value);
   // noms effectifs (catalogue + désignations modifiées au crayon) : menus, libellés et recherche en dépendent
@@ -6444,7 +6473,8 @@ function filterProducts(){
   const idxOf=new Map(allItems.map((p,i)=>[p,i])); // position dans le catalogue
   const favSet=currentCat===FAV_CAT?new Set(favCodes.concat(freqCodes())):null;   // vue « Habituels »
   const catOk=function(p){ return currentCat==='Toutes'||(favSet?favSet.has(p.code):p.cat===currentCat); };
-  const items=allItems.filter(p=>catOk(p)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
+  const qOk=function(p){ return !q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)||wordMatch(q,normTxt(p.code)+' '+normTxt(p.nom)); };   // « bouchon laiton 15 21 » trouve « Bouchon Laiton F15X21 »
+  const items=allItems.filter(p=>catOk(p)&&qOk(p));
   const g=document.getElementById('productsGrid');
   const countEl=document.getElementById('searchCount');
   if(currentCat===FAV_CAT&&!items.length&&!q){
@@ -6476,7 +6506,7 @@ function filterProducts(){
     const cats=new Set(group.map(p=>p.cat));
     if(cats.size !== 1) return;
     // Check if all items in group are in current filter
-    const inFilter=group.filter(p=>catOk(p)&&(!q||normTxt(p.code).includes(q)||normTxt(p.nom).includes(q)));
+    const inFilter=group.filter(p=>catOk(p)&&qOk(p));
     if(inFilter.length < 2) return; // don't group if only 1 visible
     // Ordre du catalogue (emplacement choisi)
     inFilter.sort((a,b)=>idxOf.get(a)-idxOf.get(b));
@@ -6499,7 +6529,7 @@ function filterProducts(){
     if(variantLeaders.has(p.code)){
       const num=IMG_MAP[p.code];
       const group=imgGroups[num]
-        .filter(x=>catOk(x)&&(!q||normTxt(x.code).includes(q)||normTxt(x.nom).includes(q)))
+        .filter(x=>catOk(x)&&qOk(x))
         .sort((a,b)=>idxOf.get(a)-idxOf.get(b));
 
       // Extract generic name - find longest common prefix across ALL items
@@ -6764,6 +6794,60 @@ function setLivraison(val){
   }
 }
 
+// ===== COMMANDE SANS RÉSEAU : gardée sur le téléphone, envoyée toute seule au retour du réseau =====
+const OUTBOX_KEY='delamotte_outbox';
+let ORDER_SEND_TIMEOUT=15000, outboxBusy=false, sendingOrder=false;
+function outboxGet(){ try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]');}catch(e){return [];} }
+function outboxSet(a){ try{localStorage.setItem(OUTBOX_KEY,JSON.stringify(a));}catch(e){} outboxUpdateUI(); }
+function isNetErr(e){ return !!e&&(e.code==='unavailable'||e.code==='deadline-exceeded'||e.code==='network'||/offline|network|unavailable|timeout/i.test(String(e.message||e))); }
+function outboxUpdateUI(){
+  const bar=document.getElementById('offlineBar'); if(bar) bar.style.display=navigator.onLine===false?'block':'none';
+  const box=document.getElementById('outboxBox'); if(!box) return;
+  const mine=outboxGet().filter(function(p){return p.user===currentUser;});
+  if(!mine.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML=mine.map(function(p){
+    const art=p.items.reduce(function(s,i){return s+(i.barres||i.qty);},0);
+    return '<div style="background:#fff3cd;color:#856404;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.82rem"><div style="font-weight:800">📶 En attente d\'envoi — '+editEsc(p.chantier)+'</div><div>'+p.items.length+' réf. · '+art+' art. · saisie le '+fmtDT(p.createdAt)+'</div>'
+      +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn-print" style="background:#27ae60" onclick="outboxFlush(true)">📤 Envoyer maintenant</button><button class="btn-print" style="background:var(--red)" data-cid="'+p.cid+'" onclick="outboxDelete(this.dataset.cid)">🗑️ Supprimer</button></div></div>';
+  }).join('');
+}
+function outboxDelete(cid){ if(!confirm('Supprimer cette commande en attente d\'envoi ?')) return; outboxSet(outboxGet().filter(function(x){return x.cid!==cid;})); }
+function orderEmail(id,p){
+  try{
+    emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
+      order_id:id,chantier:(p.service==='particulier'?'001 Particulier — ':'')+p.chantier,chef:p.chef,date:p.date,
+      articles:p.items.map(i=>i.barres?'- ['+i.code+'] '+i.nom+' x '+i.barres+' barre'+(i.barres>1?'s':'')+' ('+i.qty+'ml)':'- ['+i.code+'] '+i.nom+' x '+i.qty).join('\n'),
+      comment:p.comment||'(aucun)',total_articles:p.items.reduce((s,i)=>s+(i.barres||i.qty),0),
+      total_refs:p.items.length,to_email:EMAIL_MAGASIN
+    }).catch(()=>{});
+  }catch(e){}
+}
+// crée la commande ; une commande venant de la file d'attente vérifie d'abord qu'un envoi précédent n'a pas déjà abouti (aucun doublon)
+function submitOrder(p){
+  // 1 transaction = ticket unique de la commande + numéro + commande : si la commande existe déjà (envoi qui avait fini par aboutir, deux fenêtres, deux essais qui se croisent…), la base la reconnaît et NE LA RECRÉE JAMAIS
+  const create=function(){
+    const cref=db.collection('meta').doc('counter'), kref=db.collection('order_cids').doc(p.cid);
+    return db.runTransaction(function(tx){
+      return tx.get(kref).then(function(k){
+        if(k.exists) return {id:k.data().id,dup:true};
+        return tx.get(cref).then(function(doc){
+          const current=(doc.exists?doc.data().count:0)+1, id='CMD-'+String(current).padStart(4,'0');
+          const order={id,chantier:p.chantier,service:p.service,chef:p.chef,date:p.date,comment:p.comment,livraison:p.livraison,items:p.items,status:'pending',user:p.user,createdAt:p.queued?new Date().toISOString():p.createdAt,deleted:false,cid:p.cid};
+          if(p.queued) order.queuedAt=p.createdAt;
+          tx.set(db.collection('orders').doc(id),order);
+          tx.set(cref,{count:current});
+          tx.set(kref,{id:id,at:new Date().toISOString()});
+          return {id:id,dup:false};
+        });
+      });
+    }).then(function(r){ if(!r.dup) orderEmail(r.id,p); return r.id; });
+  };
+  if(!p.queued) return create();
+  // file d'attente : vérification supplémentaire pour les commandes créées avant l'introduction du ticket
+  return db.collection('orders').where('cid','==',p.cid).limit(1).get().then(q=>q.empty?create():q.docs[0].id);
+}
+
 function sendOrder(){
   const chantier=document.getElementById('cartChantier').value.trim();
   const chef=currentRole==='admin'?(document.getElementById('cartChef').value.trim()||currentUser):currentUser;
@@ -6773,29 +6857,100 @@ function sendOrder(){
     const f=document.getElementById('cartPickerInput'); if(f&&f.focus) f.focus();
     showToast('⚠️ Choisissez un chantier dans la liste');return;
   }
+  if(sendingOrder) return;   // évite un double envoi si on touche deux fois le bouton
   const service=chantierSvcByName(chantier);
-  const date=new Date().toLocaleString('fr-FR');
-  // Get next sequential number from Firebase
-  db.collection('meta').doc('counter').get().then(doc=>{
-    const current=(doc.exists?doc.data().count:0)+1;
-    const id='CMD-'+String(current).padStart(4,'0');
-    const livraison=service==='particulier'?'':(document.getElementById('cartLivraison')?.value||'entreprise');
-    const order={id,chantier,service,chef:chef,date,comment,livraison,items:[...cart],status:'pending',user:currentUser,createdAt:new Date().toISOString(),deleted:false};
-    const batch=db.batch();
-    batch.set(db.collection('orders').doc(id),order);
-    batch.set(db.collection('meta').doc('counter'),{count:current});
-    return batch.commit().then(()=>({id,order}));
-  }).then(({id,order})=>{
-    emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
-      order_id:id,chantier:(service==='particulier'?'001 Particulier — ':'')+chantier,chef:order.chef,date,
-      articles:cart.map(i=>i.barres?'- ['+i.code+'] '+i.nom+' x '+i.barres+' barre'+(i.barres>1?'s':'')+' ('+i.qty+'ml)':'- ['+i.code+'] '+i.nom+' x '+i.qty).join('\n'),
-      comment:comment||'(aucun)',total_articles:cart.reduce((s,i)=>s+(i.barres||i.qty),0),
-      total_refs:cart.length,to_email:EMAIL_MAGASIN
-    }).catch(()=>{});
-    cart=[];updateCartCount();
-    clearCart();
-    closeCart();showToast('Commande '+id+' envoyée !');
-  }).catch(()=>showToast('Erreur envoi commande'));
+  const livraison=service==='particulier'?'':(document.getElementById('cartLivraison')?.value||'entreprise');
+  const p={cid:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),chantier,service,chef,date:new Date().toLocaleString('fr-FR'),comment,livraison,items:cart.map(function(i){return Object.assign({},i);}),user:currentUser,createdAt:new Date().toISOString()};
+  let finished=false, timer=null;
+  const end=function(){ finished=true; sendingOrder=false; if(timer) clearTimeout(timer); cart=[];updateCartCount();clearCart();closeCart(); };
+  const queue=function(){ if(finished) return; end(); outboxSet(outboxGet().concat([p])); showToast('📶 Pas de réseau : commande gardée, elle partira toute seule'); };
+  if(navigator.onLine===false){ queue(); return; }
+  sendingOrder=true;
+  timer=setTimeout(queue,ORDER_SEND_TIMEOUT);   // réseau trop lent : on garde la commande plutôt que de laisser l'écran bloqué
+  submitOrder(p).then(function(id){ if(finished) return; end(); showToast('Commande '+id+' envoyée !'); })
+    .catch(function(e){ if(finished) return; if(isNetErr(e)) queue(); else { sendingOrder=false; clearTimeout(timer); showToast('Erreur envoi commande'); } });
+}
+const TABID=Math.random().toString(36).slice(2), LOCK_KEY='delamotte_outbox_lock';
+function outboxLockRead(){ try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null');}catch(e){return null;} }
+function outboxLockTake(){
+  const l=outboxLockRead(); if(l&&l.id!==TABID&&Date.now()-l.t<25000) return false;
+  try{localStorage.setItem(LOCK_KEY,JSON.stringify({id:TABID,t:Date.now()}));}catch(e){}
+  return true;
+}
+function outboxLockFree(){ const l=outboxLockRead(); if(l&&l.id===TABID){ try{localStorage.removeItem(LOCK_KEY);}catch(e){} } }
+let outboxBusyAt=0;
+function outboxFlush(manual){
+  if(outboxBusy){
+    // un envoi est déjà en cours : « Envoyer maintenant » peut le relancer s'il traîne depuis plus de 8 s (sans risque de doublon : ticket unique)
+    if(manual===true&&Date.now()-outboxBusyAt>8000){ outboxBusy=false; outboxLockFree(); }
+    else { if(manual===true) showToast('📤 Envoi en cours…'); return; }
+  }
+  if(navigator.onLine===false){ if(manual===true) showToast('📶 Toujours pas de réseau'); return; }
+  if(!outboxGet().length) return;
+  if(!outboxLockTake()) return;   // une autre fenêtre de l'appli est déjà en train d'envoyer
+  outboxBusy=true; outboxBusyAt=Date.now();
+  setTimeout(function(){
+    const l=outboxLockRead(), q=outboxGet();
+    if(!q.length||(l&&l.id!==TABID)){ outboxBusy=false; outboxLockFree(); return; }   // l'autre fenêtre a pris la main, ou il n'y a plus rien
+    const p=Object.assign({},q[0],{queued:true});
+    const to=setTimeout(function(){ outboxBusy=false; outboxLockFree(); },20000);
+    submitOrder(p).then(function(id){ clearTimeout(to); outboxSet(outboxGet().filter(function(x){return x.cid!==p.cid;})); outboxBusy=false; outboxLockFree(); showToast('✅ Commande '+id+' envoyée'); outboxFlush(); })
+      .catch(function(){ clearTimeout(to); outboxBusy=false; outboxLockFree(); if(manual===true) showToast('Envoi impossible pour le moment : nouvelle tentative automatique'); });
+  },80);
+}
+
+window.addEventListener('online',function(){ outboxUpdateUI(); setTimeout(outboxFlush,800); });
+window.addEventListener('offline',function(){ outboxUpdateUI(); });
+setInterval(outboxFlush,30000);
+setTimeout(outboxUpdateUI,0);
+setTimeout(outboxFlush,3000);   // dès l'ouverture de l'appli (même sans être connecté) : on renvoie ce qui attend
+
+// ===== DICTÉE VOCALE : bouton micro dans la recherche du catalogue =====
+let voiceRec=null, voiceOn=false;
+function voiceSupported(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition); }
+function voiceInit(){ const b=document.getElementById('micBtn'); if(b) b.style.display=voiceSupported()?'':'none'; }
+// « quinze vingt et un » → « 15 21 » (certains téléphones écrivent les nombres en toutes lettres)
+function voiceNumbers(s){
+  const U={zero:0,un:1,une:1,deux:2,trois:3,quatre:4,cinq:5,six:6,sept:7,huit:8,neuf:9,dix:10,onze:11,douze:12,treize:13,quatorze:14,quinze:15,seize:16};
+  const T={vingt:20,vingts:20,trente:30,quarante:40,cinquante:50,soixante:60};
+  const w=s.split(' '), out=[];
+  const parse=function(i){
+    const t=w[i]; let v=null, j=i;
+    if(t==='quatre'&&(w[i+1]==='vingt'||w[i+1]==='vingts')){ v=80; j=i+2; }
+    else if(T[t]!==undefined){ v=T[t]; j=i+1; }
+    if(v!==null){
+      let k=j; if(w[k]==='et'&&(w[k+1]==='un'||w[k+1]==='une'||w[k+1]==='onze')) k++;
+      const n=w[k];
+      if(n==='dix'&&(w[k+1]==='sept'||w[k+1]==='huit'||w[k+1]==='neuf')&&(v===60||v===80)) return [v+10+U[w[k+1]],k+2];
+      if(U[n]!==undefined&&U[n]>=1&&U[n]<=9) return [v+U[n],k+1];
+      if(U[n]!==undefined&&U[n]>=10&&U[n]<=16&&(v===60||v===80)) return [v+U[n],k+1];
+      return [v,j];
+    }
+    if(t==='dix'&&(w[i+1]==='sept'||w[i+1]==='huit'||w[i+1]==='neuf')) return [10+U[w[i+1]],i+2];
+    if(U[t]!==undefined&&t!=='un'&&t!=='une') return [U[t],i+1];
+    return null;
+  };
+  for(let i=0;i<w.length;){ const r=parse(i); if(r){ out.push(String(r[0])); i=r[1]; } else { out.push(w[i]); i++; } }
+  return out.join(' ');
+}
+function voiceClean(t){
+  let s=String(t||'').toLowerCase().replace(/[.,;:!?'’]/g,' ').replace(/-/g,' ').replace(/\s+/g,' ').trim();
+  s=voiceNumbers(s);
+  return s.split(' ').filter(function(x){return ['par','x','fois','diametre','diamètre','millimetres','millimètres','mm'].indexOf(x)===-1;}).join(' ');
+}
+function voiceSearch(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ showToast('Dictée non disponible sur cet appareil'); return; }
+  const b=document.getElementById('micBtn');
+  if(voiceOn&&voiceRec){ try{voiceRec.stop();}catch(e){} return; }
+  const r=new SR(); r.lang='fr-FR'; r.interimResults=false; r.maxAlternatives=1; voiceRec=r; voiceOn=true; if(b) b.classList.add('rec');
+  r.onresult=function(ev){
+    const t=voiceClean((ev.results[0][0]||{}).transcript||''), inp=document.getElementById('searchInput');
+    if(t){ inp.value=t; filterProducts(); toggleClearBtn(); showToast('🎤 « '+t+' »'); }
+  };
+  r.onerror=function(ev){ showToast(ev.error==='not-allowed'||ev.error==='service-not-allowed'?'🎤 Micro refusé : autorisez-le dans les réglages du navigateur':(ev.error==='no-speech'?'🎤 Rien entendu, réessayez':'🎤 Dictée impossible')); };
+  r.onend=function(){ voiceOn=false; if(b) b.classList.remove('rec'); };
+  try{ r.start(); showToast('🎤 Parlez maintenant…'); }catch(e){ voiceOn=false; if(b) b.classList.remove('rec'); }
 }
 
 function getOrders(){try{return JSON.parse(localStorage.getItem('delamotte_orders')||'[]');}catch{return[];}}
@@ -6805,16 +6960,16 @@ function ownDataOnly(){ return currentRole==='chef'||currentRole==='particulier'
 // ===== LECTURES ÉCONOMES (forfait gratuit Firebase : 50 000 lectures par jour) =====
 // On ne charge que les commandes des 35 derniers jours + toutes les commandes en attente ; l'historique complet se charge à la demande.
 const ORDERS_WINDOW_DAYS=35;
-let ordersRec=[], ordersPen=[], ordersOlder=[], ordersUnsubs=[], ordersOlderUnsub=null, ordersAllLoaded=false;
+let ordersRes=[], ordersRec=[], ordersPen=[], ordersOlder=[], ordersUnsubs=[], ordersOlderUnsub=null, ordersAllLoaded=false;
 let ordersReady={rec:false,pen:false};
 function ordersCutoff(){ return new Date(Date.now()-ORDERS_WINDOW_DAYS*86400000).toISOString(); }
 function stopOrderListeners(){
   ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
   if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
-  ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null;
+  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null;
 }
 function ordersMerge(){
-  const m={}; ordersOlder.concat(ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
+  const m={}; ordersOlder.concat(ordersRes,ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
   const orders=Object.values(m).filter(function(o){return !o.deleted;}).sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
   localStorage.setItem('delamotte_orders',JSON.stringify(orders));
   // nouveau message sur une de mes commandes : alerte (jamais au chargement initial, ni pour mes propres messages)
@@ -6827,6 +6982,8 @@ function ordersMerge(){
     if(doneSeenIds!==null) mine.forEach(function(o){ if(o.status==='done'&&!doneSeenIds[o.id]){ showToast('✅ Commande '+o.id+' ('+o.chantier+') traitée'); sysNotify('Commande traitée',o.id+' — '+o.chantier); } });
     doneSeenIds={}; mine.forEach(function(o){ if(o.status==='done') doneSeenIds[o.id]=1; });
   }
+  orders.forEach(function(o){ if((o.reste||[]).length&&o.hasReste===undefined&&!hasResteFixed[o.id]&&(currentRole==='admin'||o.user===currentUser)){ hasResteFixed[o.id]=1; db.collection('orders').doc(o.id).update({hasReste:true}).catch(function(){}); } });
+  if(ordersReady.rec&&ordersReady.pen) setTimeout(resteDailyAlert,600);
   renderOrders();updateOrdersBadge();renderDashboard();updateCommentBadge();
   if(currentCat===FAV_CAT) filterProducts();   // « souvent commandés » suit les nouvelles commandes
 }
@@ -6839,9 +6996,11 @@ function listenOrders(){
     // récentes : nécessite un index composite (user + createdAt) ; tant qu'il n'existe pas, repli sur toutes les commandes de l'utilisateur
     ordersUnsubs.push(sub(base.where('createdAt','>=',cut),function(a){ordersRec=a;},function(){ ordersUnsubs.push(sub(base,function(a){ordersRec=a;},null,'rec')); },'rec'));
     ordersUnsubs.push(sub(base.where('status','==','pending'),function(a){ordersPen=a;},null,'pen'));
+    ordersUnsubs.push(sub(base.where('hasReste','==',true),function(a){ordersRes=a;}));
   }else{
     ordersUnsubs.push(sub(db.collection('orders').where('createdAt','>=',cut).orderBy('createdAt','desc'),function(a){ordersRec=a;},null,'rec'));
     ordersUnsubs.push(sub(db.collection('orders').where('status','==','pending'),function(a){ordersPen=a;},null,'pen'));
+    ordersUnsubs.push(sub(db.collection('orders').where('hasReste','==',true),function(a){ordersRes=a;}));
   }
 }
 // charge l'historique complet (une seule fois par session) : statistiques, exports, anciennes commandes
@@ -6880,17 +7039,19 @@ function renderOrders(){
   const pending=vis.filter(o=>o.status==='pending').length;
   const cutW=ordersCutoff(), visW=vis.filter(o=>o.status==='pending'||String(o.createdAt||'')>=cutW), done=visW.filter(o=>o.status==='done').length;   // compteurs : 35 derniers jours + en attente (identiques PC / téléphone)
   updateOrdersBadge();
-  notifBarRender(); updateDoneBadge();
+  notifBarRender(); updateDoneBadge(); outboxUpdateUI(); lateBarRender();
   renderDashboard();
   document.getElementById('statsBar').innerHTML=`
     <div class="stat-card"><div class="stat-num">${visW.length}</div><div class="stat-label">Total (35 j)</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`;
-  document.getElementById('filterBar').innerHTML=['all','pending','done'].map(f=>`
+  const lateN=resteLateList().length; if(orderFilter==='late'&&!lateN) orderFilter='all';
+  document.getElementById('filterBar').innerHTML=['all','pending','done'].concat(lateN?['late']:[]).map(f=>`
     <button class="filter-btn${orderFilter===f?' active':''}" onclick="setFilter('${f}')">
-      ${f==='all'?'Toutes':f==='pending'?'En attente':'Traitées'}</button>`).join('');
+      ${f==='all'?'Toutes':f==='pending'?'En attente':f==='late'?'⚠️ À relancer ('+lateN+')':'Traitées'}</button>`).join('');
   let filtered=getVisibleOrders(all);
   if(orderFilter==='pending')filtered=filtered.filter(o=>o.status==='pending');
+  if(orderFilter==='late')filtered=filtered.filter(resteLate);
   if(orderFilter==='done')filtered=filtered.filter(o=>o.status==='done');
   // Date filter
   const dateFrom=document.getElementById('dateFrom').value;
@@ -6942,7 +7103,7 @@ function reopenOrder(id){
   if(!confirm(msg)) return;
   const batch=db.batch();
   undoOrderInto(batch,o,'annulation','Commande '+id+' remise en attente');
-  batch.update(db.collection('orders').doc(id),{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null,reopenedBy:currentUser,reopenedAt:new Date().toISOString()});
+  batch.update(db.collection('orders').doc(id),{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null,hasReste:false,reopenedBy:currentUser,reopenedAt:new Date().toISOString()});
   batch.commit().then(()=>showToast(ap.length?'Commande remise en attente, stock remis ↩️':'Commande remise en attente ↩️'))
     .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
 }
@@ -7404,12 +7565,12 @@ function printRetour(id){
 function resteCanMark(o){ return !!o&&(currentRole==='admin'||o.user===currentUser||(currentRole==='conducteur'&&getVisibleOrders([o]).length>0)); }
 function resteHtml(o){
   if(!o) return '';
-  const r=o.reste||[], log=o.resteRecu||[], can=resteCanMark(o);
+  const r=o.reste||[], log=o.resteRecu||[], can=resteCanMark(o), late=resteLate(o), days=resteDays(o);
   let html='';
   if(r.length){
     const btn='padding:3px 9px;font-size:0.72rem;background:#27ae60';
-    html+='<div style="background:#fff3cd;color:#856404;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:0.78rem;">'
-      +'<div style="font-weight:700;margin-bottom:3px">⏳ Reste à recevoir'+(can&&currentRole!=='admin'?' <span style="font-weight:400">— cliquez « Reçu » quand le matériel est arrivé</span>':'')+'</div>'
+    html+='<div style="background:'+(late?'#fdecea':'#fff3cd')+';color:'+(late?'#c0392b':'#856404')+';border-radius:8px;padding:8px 10px;margin:6px 0;font-size:0.78rem;'+(late?'border:1px solid #e74c3c;':'')+'">'
+      +'<div style="font-weight:700;margin-bottom:3px">'+(late?'⚠️ Reste à recevoir depuis '+days+' jours':'⏳ Reste à recevoir')+(can&&currentRole!=='admin'?' <span style="font-weight:400">— cliquez « Reçu » quand le matériel est arrivé</span>':(late&&currentRole==='admin'?' <span style="font-weight:400">— pensez à relancer le fournisseur</span>':''))+'</div>'
       +r.map(function(x,i){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span>• '+editEsc(x.nom)+' × <b>'+x.qty+'</b></span>'+(can?'<button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\','+i+')">✅ Reçu</button>':'')+'</div>'; }).join('')
       +(can&&r.length>1?'<div style="text-align:right;margin-top:4px"><button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\',-1)">✅ Tout reçu</button></div>':'')
       +'</div>';
@@ -7417,10 +7578,11 @@ function resteHtml(o){
   if(log.length) html+='<div style="font-size:0.72rem;color:var(--muted);margin:4px 0">✅ Reçu sur chantier : '+log.slice(-4).map(function(l){return editEsc(l.nom)+' × '+l.qty+' ('+editEsc(l.par||'')+', '+String(l.d||'').slice(8,10)+'/'+String(l.d||'').slice(5,7)+')';}).join(' · ')+(log.length>4?' …':'')+'</div>';
   return html;
 }
+
 function resteRecu(id,idx){
   const o=getOrders().find(function(x){return x.id===id;}); if(!o||!resteCanMark(o)||!(o.reste||[]).length) return;
   const got=idx<0?o.reste.slice():[o.reste[idx]], left=idx<0?[]:o.reste.filter(function(_,i){return i!==idx;}), d=new Date().toISOString();
-  db.collection('orders').doc(id).update({reste:left,resteRecu:firebase.firestore.FieldValue.arrayUnion.apply(null,got.map(function(x){return {code:x.code,nom:x.nom,qty:x.qty,par:currentUser,d:d};}))})
+  db.collection('orders').doc(id).update({reste:left,hasReste:left.length>0,resteRecu:firebase.firestore.FieldValue.arrayUnion.apply(null,got.map(function(x){return {code:x.code,nom:x.nom,qty:x.qty,par:currentUser,d:d};}))})
     .then(function(){ showToast(left.length?'✅ Article reçu':'✅ Tout est reçu'); }).catch(function(){ showToast('❌ Non enregistré'); });
 }
 
@@ -7509,7 +7671,7 @@ function confirmMarkDone(){
   const reaOf=function(i){ const c=document.getElementById('rea_'+i); return c?c.checked:true; };   // « Réappro » décoché : cette ligne n'ira pas dans la liste à recommander
   // Items non en stock (décochés) → bon fournisseur
   const missingItems=lines.filter(l=>l.g<l.it.qty).map(l=>Object.assign({},l.it,{qty:l.it.qty-l.g}));   // ce qui n'est pas donné : bon fournisseur + « reste à recevoir »
-  update.reste=missingItems.map(m=>({code:m.code,nom:m.nom,qty:m.qty}));
+  update.reste=missingItems.map(m=>({code:m.code,nom:m.nom,qty:m.qty})); update.hasReste=missingItems.length>0;
 
   const now=new Date().toISOString();
   const svc=orderSvc(order);   // le service de la commande décide du stock déduit (bleu = gros chantier, rouge = particulier)
@@ -7580,7 +7742,7 @@ function deleteOrder(id){
   else if(o&&o.status==='done') msg+='\n\n⚠️ Commande traitée avant la mise à jour : le stock ne sera pas remis automatiquement.';
   if(!confirm(msg))return;
   const batch=db.batch(), upd={deleted:true, deletedAt:new Date().toISOString()};
-  if(o&&o.status==='done'&&ap.length){ undoOrderInto(batch,o,'annulation','Commande '+id+' mise à la corbeille'); Object.assign(upd,{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null}); }
+  if(o&&o.status==='done'&&ap.length){ undoOrderInto(batch,o,'annulation','Commande '+id+' mise à la corbeille'); Object.assign(upd,{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null,hasReste:false}); }
   batch.update(db.collection('orders').doc(id),upd);
   batch.commit().then(()=>showToast('Commande mise à la corbeille 🗑️'))
     .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
@@ -7684,12 +7846,12 @@ function renderDashboard(){
   const todayOrders=all.filter(o=>o.date.startsWith(today));
   const pending=all.filter(o=>o.status==='pending').length;
   const cutW=ordersCutoff(), done=all.filter(o=>o.status==='done'&&String(o.createdAt||'')>=cutW).length;   // même nombre sur tous les appareils (35 derniers jours)
-  const aG=stockAlertList('gros').length;
+  const aG=stockAlertList('gros').length, lateAll=all.filter(resteLate).length;
   const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">📦 Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`+al('gros',aG);
+    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+al('gros',aG);
 }
 
 function clearDateFilter(){
@@ -8734,7 +8896,7 @@ function invFilteredItems(){
   const allItems=[...CATALOGUE,...customRefsCache];
   return allItems.filter(p=>{
     const matchCat=invCat==='Toutes'||p.cat===invCat;
-    const matchSearch=!invFilter||normTxt(p.code).includes(normTxt(invFilter))||normTxt(getEffectiveName(p.code,p.nom)).includes(normTxt(invFilter));
+    const nq=normTxt(invFilter||''), hayI=normTxt(p.code)+' '+normTxt(getEffectiveName(p.code,p.nom)), matchSearch=!invFilter||hayI.includes(nq)||wordMatch(nq,hayI);
     const qty=stockOf(p.code,invSvc);
     const matchFaible=!invShowFaible||(qty>0&&qty<=invSeuilAlerte);
     return matchCat&&matchSearch&&matchFaible;
@@ -8986,7 +9148,7 @@ function artRows(C,year){
 
 function artFiltered(C){
   const q=normTxt(art.q);
-  let rows=artRows(C,art.year).filter(function(r){ return (art.cat==='Toutes'||r.cat===art.cat)&&(!q||normTxt(r.code).indexOf(q)!==-1||normTxt(r.nom).indexOf(q)!==-1); });
+  let rows=artRows(C,art.year).filter(function(r){ return (art.cat==='Toutes'||r.cat===art.cat)&&(!q||wordMatch(q,normTxt(r.code)+' '+normTxt(r.nom))); });
   const cmp={total:function(a,b){return b.net-a.net;},nom:function(a,b){return a.nom.localeCompare(b.nom,'fr');},code:function(a,b){return a.code.localeCompare(b.code);},couv:function(a,b){return (a.couv===null?1e9:a.couv)-(b.couv===null?1e9:b.couv);}}[art.sort]||function(a,b){return b.net-a.net;};
   return rows.sort(cmp);
 }
@@ -9043,7 +9205,7 @@ function artBilCompute(rows,startISO,endISO){
 function artBilFiltered(){
   const R=artBilRange(); let rows=artBilCompute(artBilCache.rows,R.s,R.e);
   const q=normTxt(art.bq);
-  rows=rows.filter(function(r){ return (art.bcat==='Toutes'||r.cat===art.bcat)&&(!q||normTxt(r.code).indexOf(q)!==-1||normTxt(r.nom).indexOf(q)!==-1); });
+  rows=rows.filter(function(r){ return (art.bcat==='Toutes'||r.cat===art.bcat)&&(!q||wordMatch(q,normTxt(r.code)+' '+normTxt(r.nom))); });
   const cmp={sor:function(a,b){return b.sor-a.sor;},ent:function(a,b){return b.ent-a.ent;},nom:function(a,b){return a.nom.localeCompare(b.nom,'fr');},code:function(a,b){return a.code.localeCompare(b.code);}}[art.bsort]||function(a,b){return b.sor-a.sor;};
   return rows.sort(cmp);
 }
@@ -9238,7 +9400,7 @@ function artRenderFiche(){
 function artSearch(v){
   art.fq=v; const q=normTxt(v).trim(), el=document.getElementById('artResults'); if(!el) return;
   if(!q){ el.innerHTML=''; return; }
-  const res=[...CATALOGUE,...customRefsCache].filter(function(p){return (p.cat!==DLM_CAT||canSeeDlm())&&(normTxt(p.code).indexOf(q)!==-1||normTxt(getEffectiveName(p.code,p.nom)).indexOf(q)!==-1);}).slice(0,12);
+  const res=[...CATALOGUE,...customRefsCache].filter(function(p){return (p.cat!==DLM_CAT||canSeeDlm())&&wordMatch(q,normTxt(p.code)+' '+normTxt(getEffectiveName(p.code,p.nom)));}).slice(0,12);
   el.innerHTML=res.length?res.map(function(p){return '<div class="mvt-row" style="cursor:pointer" data-code="'+p.code+'" onclick="artSelect(this.dataset.code)"><b>'+p.code+'</b> — '+editEsc(getEffectiveName(p.code,p.nom))+' <span style="color:var(--muted);font-size:0.72rem">· '+editEsc(p.cat)+'</span></div>';}).join(''):'<p style="color:var(--muted);padding:10px">Aucun article trouvé</p>';
 }
 function artSelect(code){ art.code=code; art.fq=''; artRenderFiche(); }
