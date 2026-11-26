@@ -273,6 +273,7 @@ const db = firebase.firestore();
   .reappro-fourn-title{font-weight:700;font-size:1rem;}
   .reappro-fourn-body{padding:12px 16px;display:none;}
   .reappro-fourn-body.open{display:block;}
+  .btn-rea-del{background:none;border:1.5px solid var(--red);color:var(--red);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:0.8rem;font-weight:700;}
   .reappro-table{width:100%;border-collapse:collapse;font-size:0.82rem;margin-bottom:12px;}
   .reappro-table th{background:#f3e5f5;color:#6a1b9a;padding:7px 10px;text-align:left;}
   .reappro-table td{padding:6px 10px;border-bottom:1px solid var(--border);}
@@ -687,7 +688,7 @@ const db = firebase.firestore();
     </div>
 
     <div id="deliveryMissingMsg" style="display:none;background:#fff3cd;border-radius:8px;padding:10px;font-size:0.82rem;color:#856404;margin-bottom:12px;">
-      ⚠️ Les articles non cochés seront inclus dans le <b>bon fournisseur</b> automatiquement.
+      ⚠️ Ce qui n'est pas donné (articles non cochés, ou quantité donnée plus petite) sera inclus dans le <b>bon fournisseur</b> automatiquement et noté « <b>reste à recevoir</b> » sur la commande pour le chef.
     </div>
 
     <div style="display:flex;gap:10px;">
@@ -6284,6 +6285,7 @@ const DLM_CAT='ATELIER DLM';
 function canSeeDlm(){ if(currentRole==='admin') return true; const u=getAllUsers()[currentUser]; return !!(u&&getPermissions(u).dlm); }
 const FAV_CAT='Habituels';   // « ⭐ Habituels » : mes favoris + les articles que je commande le plus souvent
 CAT_ICON[FAV_CAT]='\u2B50';
+
 function visibleCats(){ const base=CATS.filter(function(c){return c!==DLM_CAT;}); const withFav=[base[0],FAV_CAT].concat(base.slice(1)); return canSeeDlm()?withFav.concat([DLM_CAT]):withFav; }
 CAT_ICON[DLM_CAT]='\u{1F6E0}\u{FE0F}';
 function buildCatalogue(){
@@ -6780,6 +6782,7 @@ function renderOrders(){
       <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${(()=>{const s=orderSvc(o);return '<span style="background:'+(s==='particulier'?'#fdecea':'#e8f4fd')+';color:'+(s==='particulier'?'#c0392b':'#2980b9')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(s==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')+'</span>';})()} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
       ${o.dateLivraison?`<div class="order-info" style="color:var(--green);font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
+      ${resteHtml(o)}
       ${orderValueHtml(o)}
       ${orderEditInfoHtml(o)}
       <div class="order-actions">
@@ -6805,7 +6808,7 @@ function reopenOrder(id){
   if(!confirm(msg)) return;
   const batch=db.batch();
   undoOrderInto(batch,o,'annulation','Commande '+id+' remise en attente');
-  batch.update(db.collection('orders').doc(id),{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reopenedBy:currentUser,reopenedAt:new Date().toISOString()});
+  batch.update(db.collection('orders').doc(id),{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null,reopenedBy:currentUser,reopenedAt:new Date().toISOString()});
   batch.commit().then(()=>showToast(ap.length?'Commande remise en attente, stock remis ↩️':'Commande remise en attente ↩️'))
     .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
 }
@@ -7263,6 +7266,23 @@ function printRetour(id){
   setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},1000);
 }
 
+// ===== RESTE À RECEVOIR : ce que le magasin n'a pas pu donner (ou pas en entier) à la remise de la commande =====
+function resteHtml(o){
+  const r=(o&&o.reste)||[]; if(!r.length) return '';
+  const adm=currentRole==='admin';
+  const btn='padding:3px 9px;font-size:0.72rem;background:#27ae60';
+  return '<div style="background:#fff3cd;color:#856404;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:0.78rem;">'
+    +'<div style="font-weight:700;margin-bottom:3px">⏳ Reste à recevoir</div>'
+    +r.map(function(x,i){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span>• '+x.nom+' × <b>'+x.qty+'</b></span>'+(adm?'<button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\','+i+')">✅ Reçu</button>':'')+'</div>'; }).join('')
+    +(adm&&r.length>1?'<div style="text-align:right;margin-top:4px"><button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\',-1)">✅ Tout reçu</button></div>':'')
+    +'</div>';
+}
+function resteRecu(id,idx){
+  if(currentRole!=='admin') return;
+  const o=getOrders().find(function(x){return x.id===id;}); if(!o||!(o.reste||[]).length) return;
+  const left=idx<0?[]:o.reste.filter(function(_,i){return i!==idx;});
+  db.collection('orders').doc(id).update({reste:left}).then(function(){ showToast(left.length?'✅ Article reçu':'✅ Tout est reçu'); }).catch(function(){ showToast('❌ Non enregistré'); });
+}
 function markDone(id){
   const order=getOrders().find(o=>o.id===id);
   if(!order) return;
@@ -7275,28 +7295,36 @@ function markDone(id){
 
   // Build items list with stock info
   let hasMissing=false;
-  document.getElementById('deliveryItemsList').innerHTML=order.items.map((item,i)=>{
+  document.getElementById('deliveryItemsList').innerHTML='<div style="font-size:0.72rem;color:var(--muted);margin-bottom:6px;">☑ <b>Donné</b> : la quantité que tu remets maintenant (le reste est commandé chez le fournisseur et noté « reste à recevoir » pour le chef). <b>Réappro</b> : la quantité donnée est ajoutée à la liste à recommander ; décochez-le pour une référence à ne pas recommander.</div>'+order.items.map((item,i)=>{
     const stockQty=stockOf(item.code,svcO);
     const enStock=stockQty>=item.qty;
     const stockPartiel=stockQty>0&&stockQty<item.qty;
-    if(!enStock) hasMissing=true;
+    const canPart=!item.barres;                                   // une barre (en mètres) est donnée en entier ou pas du tout
+    const chk=canPart?stockQty>0:enStock;                         // coché d'office dès qu'il y a du stock
+    const give0=enStock?item.qty:(stockQty>0&&canPart?stockQty:item.qty);   // proposé : tout si le stock suffit, sinon ce qu'il y a en stock
+    if(!chk||(chk&&give0<item.qty)) hasMissing=true;
     const stockInfo=stockQty===0
       ?`<span style="color:var(--red);font-size:0.72rem">❌ Rupture ${icoO}</span>`
       :stockPartiel
         ?`<span style="color:var(--orange);font-size:0.72rem">⚠️ Stock ${icoO}: ${stockQty} / Demandé: ${item.qty}</span>`
         :`<span style="color:var(--green);font-size:0.72rem">✅ Stock ${icoO}: ${stockQty}</span>`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
-      <input type="checkbox" id="dlv_${i}" ${enStock?'checked':''} onchange="updateMissingMsg()" style="width:16px;height:16px;cursor:pointer;flex-shrink:0">
-      <label for="dlv_${i}" style="flex:1;cursor:pointer;font-size:0.82rem;">
-        <span style="color:var(--muted);font-size:0.72rem">${item.code}</span><br>
-        <span style="font-weight:600">${item.nom}</span> × ${item.qty}<br>
-        ${stockInfo}
-      </label>
+    return `<div style="padding:7px 0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="dlv_${i}" ${chk?'checked':''} onchange="updateMissingMsg()" style="width:16px;height:16px;cursor:pointer;flex-shrink:0">
+        <label for="dlv_${i}" style="flex:1;cursor:pointer;font-size:0.82rem;">
+          <span style="color:var(--muted);font-size:0.72rem">${item.code}</span><br>
+          <span style="font-weight:600">${item.nom}</span> × ${item.qty}<br>
+          ${stockInfo}
+        </label>
+        <label id="reaWrap_${i}" style="display:${chk?'flex':'none'};align-items:center;gap:4px;font-size:0.72rem;color:var(--muted);white-space:nowrap;flex-shrink:0;cursor:pointer;"><input type="checkbox" id="rea_${i}" checked style="width:15px;height:15px;cursor:pointer"> Réappro</label>
+      </div>
+      ${canPart?`<div id="giveWrap_${i}" style="display:${chk?'flex':'none'};align-items:center;gap:6px;margin:5px 0 0 24px;font-size:0.76rem;color:var(--muted);flex-wrap:wrap;">Donné <input type="number" id="give_${i}" min="1" max="${item.qty}" value="${give0}" oninput="updateMissingMsg()" style="width:60px;padding:3px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-weight:700;background:var(--white);color:var(--text);"> sur ${item.qty} <span id="rest_${i}" style="color:var(--orange);font-weight:700"></span></div>`:''}
     </div>`;
   }).join('');
 
   document.getElementById('deliveryMissingMsg').style.display=hasMissing?'block':'none';
   document.getElementById('deliveryModal').style.display='flex';
+  updateMissingMsg();
 }
 function selectAllStock(val){
   const order=getOrders().find(o=>o.id===pendingMarkDoneId);
@@ -7310,7 +7338,16 @@ function selectAllStock(val){
 function updateMissingMsg(){
   const order=getOrders().find(o=>o.id===pendingMarkDoneId);
   if(!order) return;
-  const hasMissing=order.items.some((_,i)=>!document.getElementById('dlv_'+i)?.checked);
+  let hasMissing=false;
+  order.items.forEach((it,i)=>{
+    const chk=!!document.getElementById('dlv_'+i)?.checked;
+    const w=document.getElementById('reaWrap_'+i); if(w) w.style.display=chk?'flex':'none';     // « Réappro » seulement pour les lignes données
+    const gw=document.getElementById('giveWrap_'+i); if(gw) gw.style.display=chk?'flex':'none';
+    let rest=it.qty;
+    if(chk){ const gi=document.getElementById('give_'+i); let g=gi?parseInt(gi.value):it.qty; if(isNaN(g)) g=it.qty; g=Math.max(0,Math.min(g,it.qty)); rest=it.qty-g; }
+    const rs=document.getElementById('rest_'+i); if(rs) rs.textContent=(chk&&rest>0)?('→ reste à recevoir : '+rest):'';
+    if(rest>0) hasMissing=true;
+  });
   document.getElementById('deliveryMissingMsg').style.display=hasMissing?'block':'none';
 }
 function closeDeliveryModal(){
@@ -7326,30 +7363,35 @@ function confirmMarkDone(){
   const update={status:'done',dateLivraison:livraison,dateLivraisonISO:dateInput};
 
   // Items en stock (cochés) → déduire stock
-  const inStockItems=order.items.filter((_,i)=>document.getElementById('dlv_'+i)?.checked);
+  const givenOf=function(i,it){ if(!document.getElementById('dlv_'+i)?.checked) return 0; const gi=document.getElementById('give_'+i); let g=gi?parseInt(gi.value):it.qty; if(isNaN(g)) g=it.qty; return Math.max(0,Math.min(g,it.qty)); };
+  const lines=order.items.map((it,i)=>({it:it,i:i,g:givenOf(i,it)}));   // g = quantité réellement donnée à la remise
+  const reaOf=function(i){ const c=document.getElementById('rea_'+i); return c?c.checked:true; };   // « Réappro » décoché : cette ligne n'ira pas dans la liste à recommander
   // Items non en stock (décochés) → bon fournisseur
-  const missingItems=order.items.filter((_,i)=>!document.getElementById('dlv_'+i)?.checked);
+  const missingItems=lines.filter(l=>l.g<l.it.qty).map(l=>Object.assign({},l.it,{qty:l.it.qty-l.g}));   // ce qui n'est pas donné : bon fournisseur + « reste à recevoir »
+  update.reste=missingItems.map(m=>({code:m.code,nom:m.nom,qty:m.qty}));
 
   const now=new Date().toISOString();
   const svc=orderSvc(order);   // le service de la commande décide du stock déduit (bleu = gros chantier, rouge = particulier)
   const batch=db.batch(), applied=[], agg={};
-  inStockItems.forEach(it=>{ if(!agg[it.code]) agg[it.code]={code:it.code,nom:it.nom,qty:0}; agg[it.code].qty+=it.qty; });
+  lines.filter(l=>l.g>0).forEach(l=>{ const it=l.it; if(!agg[it.code]) agg[it.code]={code:it.code,nom:it.nom,qty:0,rea:0}; agg[it.code].qty+=l.g; if(reaOf(l.i)) agg[it.code].rea+=l.g; });
   Object.values(agg).forEach(item=>{
     const current=stockOf(item.code,svc);
     const newQty=Math.max(0,current-item.qty);
     stockPatch(batch,item.code,{[stockField(svc)]:newQty});
     mvtAdd(batch,{code:item.code,nom:item.nom,service:svc,avant:current,apres:newQty,type:'commande',ref:order.id});
-    const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
-    const chantiers=Object.assign({},existing.chantiers);
-    chantiers[order.chantier]=(chantiers[order.chantier]||0)+item.qty;
-    const services=Object.assign({},reapproServices(existing.totalQty?existing:null));
-    services[svc]=(services[svc]||0)+item.qty;
-    batch.set(db.collection('reappro_stock').doc(item.code),{
-      code:item.code,nom:item.nom,
-      totalQty:existing.totalQty+item.qty,
-      chantiers:chantiers,services:services,updatedAt:now
-    });
-    applied.push({code:item.code,nom:item.nom,deducted:current-newQty,reappro:item.qty});   // ce qui a réellement été déduit : permet d'annuler proprement
+    if(item.rea>0){   // ajouté à la liste à recommander seulement si « Réappro » est coché
+      const existing=reapproStockCache[item.code]||{totalQty:0,chantiers:{}};
+      const chantiers=Object.assign({},existing.chantiers);
+      chantiers[order.chantier]=(chantiers[order.chantier]||0)+item.rea;
+      const services=Object.assign({},reapproServices(existing.totalQty?existing:null));
+      services[svc]=(services[svc]||0)+item.rea;
+      batch.set(db.collection('reappro_stock').doc(item.code),{
+        code:item.code,nom:item.nom,
+        totalQty:existing.totalQty+item.rea,
+        chantiers:chantiers,services:services,updatedAt:now
+      });
+    }
+    applied.push({code:item.code,nom:item.nom,deducted:current-newQty,reappro:item.rea});   // ce qui a réellement été déduit : permet d'annuler proprement
   });
   update.stockApplied=applied; update.stockService=svc; update.processedBy=currentUser; update.processedAt=now;
   batch.update(db.collection('orders').doc(pendingMarkDoneId),update);
@@ -7397,7 +7439,7 @@ function deleteOrder(id){
   else if(o&&o.status==='done') msg+='\n\n⚠️ Commande traitée avant la mise à jour : le stock ne sera pas remis automatiquement.';
   if(!confirm(msg))return;
   const batch=db.batch(), upd={deleted:true, deletedAt:new Date().toISOString()};
-  if(o&&o.status==='done'&&ap.length){ undoOrderInto(batch,o,'annulation','Commande '+id+' mise à la corbeille'); Object.assign(upd,{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null}); }
+  if(o&&o.status==='done'&&ap.length){ undoOrderInto(batch,o,'annulation','Commande '+id+' mise à la corbeille'); Object.assign(upd,{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null}); }
   batch.update(db.collection('orders').doc(id),upd);
   batch.commit().then(()=>showToast('Commande mise à la corbeille 🗑️'))
     .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
@@ -7543,6 +7585,7 @@ function renderSuivi(){
           <div><span class="suivi-order-id">${o.id}</span>${own?'':' — '+o.chef} — ${o.date}</div>
           <div class="suivi-total">${o.items.length} réf. · ${o.items.reduce((s,i)=>s+i.qty,0)} art.${canSeeValues()?' · 💶 '+fmtEur(orderValue(o).total):''}${o.comment?' · '+o.comment:''}</div>
           ${o.dateLivraison?`<div style="color:var(--green);font-size:0.78rem;font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
+          ${resteHtml(o)}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitée':'En attente'}</span>
@@ -7715,8 +7758,43 @@ function buildReapproData(){
   return result;
 }
 
+// ===== RÉAPPRO : le service particulier est regroupé sous « 001 PARTICULIER » (le nom de chaque client reste visible) =====
+function reapproLignes(chantiers){
+  const svcOf={}; getChantiersFull().forEach(function(c){ svcOf[c.name]=c.service||'gros'; });
+  const gros=[], part=[];
+  Object.entries(chantiers||{}).forEach(function(e){ (svcOf[e[0]]==='particulier'?part:gros).push(e); });
+  const out=gros.map(function(e){return [e[0],e[1],''];});
+  if(part.length) out.push(['001 PARTICULIER',part.reduce(function(s,e){return s+e[1];},0),part.map(function(e){return e[0]+' '+e[1];}).join(', ')]);
+  return out;   // [chantier, quantité, détail des clients]
+}
+// ===== RÉAPPRO : suppression (une référence, ou toute la liste) =====
+function reapproDeleteArticle(code){
+  if(currentRole!=='admin') return;
+  if(!confirm('Retirer '+code+' du réappro ?\n(Les commandes déjà traitées ne sont pas modifiées.)')) return;
+  db.collection('reappro_stock').doc(code).delete().then(function(){ showToast('Retiré du réappro'); }).catch(function(){ showToast('❌ Non enregistré'); });
+}
+function reapproDeleteMany(coll,codes,okMsg){
+  const chunks=[]; for(let i=0;i<codes.length;i+=400) chunks.push(codes.slice(i,i+400));
+  Promise.all(chunks.map(function(c){ const b=db.batch(); c.forEach(function(code){ b.delete(db.collection(coll).doc(code)); }); return b.commit(); }))
+    .then(function(){ showToast(okMsg); }).catch(function(){ showToast('❌ Non enregistré'); });
+}
+function reapproClearAll(){
+  if(currentRole!=='admin') return;
+  const codes=Object.keys(reapproStockCache);
+  if(!codes.length) return;
+  if(!confirm('Vider TOUTE la liste à commander ('+codes.length+' référence(s)) ?\nLes articles « en attente de réception » ne sont pas touchés.\nCette action est irréversible.')) return;
+  reapproDeleteMany('reappro_stock',codes,'✅ Liste à commander vidée');
+}
+function reapproClearCommande(){
+  if(currentRole!=='admin') return;
+  const codes=Object.keys(reapproCommandeCache);
+  if(!codes.length) return;
+  if(!confirm('Vider les '+codes.length+' article(s) « en attente de réception » (reliquats compris) ?\nCette action est irréversible.')) return;
+  reapproDeleteMany('reappro_commande',codes,'✅ Articles en attente de réception supprimés');
+}
 function renderReappro(){
   const el=document.getElementById('reapproContent');
+  const canDel=currentRole==='admin';
   const data=buildReapproData();
   const fournList=Object.keys(data).sort();
   const nbEnCommande=Object.keys(reapproCommandeCache).length;
@@ -7741,13 +7819,14 @@ function renderReappro(){
     <div style="flex:1;font-size:0.85rem;color:var(--muted)">${fournList.length} fournisseur(s) à commander</div>
     ${nbEnCommande>0?`<div style="background:#fff3cd;border-radius:8px;padding:8px 12px;font-size:0.82rem;color:#856404">⏳ ${nbEnCommande} réf. en attente de réception</div>`:''}
     ${fournList.length?`<button class="btn-reappro" onclick="exportReapproAll()">📥 Exporter tout</button>`:''}
+    ${canDel&&fournList.length?`<button onclick="reapproClearAll()" style="padding:8px 14px;background:var(--white);color:var(--red);border:2px solid var(--red);border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">🗑️ Vider la liste à commander</button>`:''}
     <button onclick="renderHistoriqueCommandes()" style="padding:8px 14px;background:#8e44ad;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📜 Historique</button>
   </div>`;
 
   // EN COMMANDE section
   if(nbEnCommande>0){
     html+=`<div style="background:#fff3cd;border-radius:12px;padding:16px;margin-bottom:16px;">
-      <h3 style="font-size:0.9rem;color:#856404;margin-bottom:12px;">⏳ Articles en commande chez fournisseur (en attente réception)</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;"><h3 style="font-size:0.9rem;color:#856404;margin:0;">⏳ Articles en commande chez fournisseur (en attente réception)</h3>${canDel?`<button onclick="reapproClearCommande()" style="padding:5px 10px;background:var(--white);color:var(--red);border:1.5px solid var(--red);border-radius:8px;font-size:0.75rem;font-weight:700;cursor:pointer;">🗑️ Vider</button>`:''}</div>
       ${Object.entries(enCommandeByFourn).map(([fourn,items])=>`
         <div style="margin-bottom:10px;">
           <div style="font-weight:700;font-size:0.85rem;color:#856404;margin-bottom:6px;">🏭 ${fourn} ${items[0]?.batigest?'— Batigest: '+items[0].batigest:''}</div>
@@ -7781,14 +7860,14 @@ function renderReappro(){
           <button class="btn-reappro" style="background:var(--green)" onclick="exportReapproFourn('${fourn}')">📥 Export ${fourn}</button>
         </div>
         <table class="reappro-table">
-          <thead><tr><th>Code</th><th>Désignation</th><th>Code fourn.</th><th>Chantier(s)</th><th>Qté</th><th>Prix U.</th><th>Total HT</th></tr></thead>
+          <thead><tr><th>Code</th><th>Désignation</th><th>Code fourn.</th><th>Chantier(s)</th><th>Qté</th><th>Prix U.</th><th>Total HT</th>${canDel?'<th></th>':''}</tr></thead>
           <tbody>
             ${Object.entries(articles).map(([code,a])=>{
-              const ch=Object.entries(a.chantiers).map(([c,q])=>c+': '+q).join('<br>');
-              return '<tr><td style="font-size:0.75rem;color:var(--muted)">'+code+'</td><td>'+a.nom+'</td><td style="font-size:0.75rem">'+a.codeFourn+'</td><td style="font-size:0.75rem">'+ch+'</td><td style="text-align:center;font-weight:700">'+a.totalQty+'</td><td style="text-align:right">'+(a.prix>0?a.prix.toFixed(2)+' €':'-')+'</td><td style="text-align:right;font-weight:600">'+(a.prix>0?(a.totalQty*a.prix).toFixed(2)+' €':'-')+'</td></tr>';
+              const ch=reapproLignes(a.chantiers).map(l=>l[0]+': '+l[1]+(l[2]?'<br><span style="color:var(--muted)">↳ '+l[2]+'</span>':'')).join('<br>');
+              return '<tr><td style="font-size:0.75rem;color:var(--muted)">'+code+'</td><td>'+a.nom+'</td><td style="font-size:0.75rem">'+a.codeFourn+'</td><td style="font-size:0.75rem">'+ch+'</td><td style="text-align:center;font-weight:700">'+a.totalQty+'</td><td style="text-align:right">'+(a.prix>0?a.prix.toFixed(2)+' €':'-')+'</td><td style="text-align:right;font-weight:600">'+(a.prix>0?(a.totalQty*a.prix).toFixed(2)+' €':'-')+'</td>'+(canDel?'<td style="text-align:center"><button class="btn-rea-del" onclick="reapproDeleteArticle(\''+code+'\')" title="Retirer du réappro">✖</button></td>':'')+'</tr>';
             }).join('')}
           </tbody>
-          ${totalHT>0?`<tfoot><tr class="reappro-total-row"><td colspan="6" style="text-align:right">TOTAL HT :</td><td style="text-align:right">${totalHT.toFixed(2)} €</td></tr></tfoot>`:''}
+          ${totalHT>0?`<tfoot><tr class="reappro-total-row"><td colspan="${canDel?7:6}" style="text-align:right">TOTAL HT :</td><td style="text-align:right">${totalHT.toFixed(2)} €</td></tr></tfoot>`:''}
         </table>
       </div>
     </div>`;
@@ -7852,7 +7931,7 @@ function exportReapproFournAvecBatigest(fourn,articles,batigest){
     ['CODE DELAMOTTE','DÉSIGNATION','CODE FOURNISSEUR','CHANTIER','QTÉ','PRIX U.','TOTAL HT'],
   ];
   Object.entries(articles).forEach(([code,a])=>{
-    Object.entries(a.chantiers).forEach(([chantier,qty],i)=>{
+    reapproLignes(a.chantiers).forEach(([chantier0,qty,det],i)=>{const chantier=chantier0+(det?' ('+det+')':'');
       wsData.push([i===0?code:'',i===0?a.nom:'',i===0?a.codeFourn:'',chantier,qty,i===0&&a.prix>0?a.prix:'',i===0&&a.prix>0?(a.totalQty*a.prix).toFixed(2):'']);
     });
   });
@@ -7877,7 +7956,7 @@ function exportReapproFourn(fourn){
     ['CODE DELAMOTTE','DÉSIGNATION','CODE FOURNISSEUR','CHANTIER','QTÉ','PRIX U.','TOTAL HT'],
   ];
   Object.entries(articles).forEach(([code,a])=>{
-    Object.entries(a.chantiers).forEach(([chantier,qty],i)=>{
+    reapproLignes(a.chantiers).forEach(([chantier0,qty,det],i)=>{const chantier=chantier0+(det?' ('+det+')':'');
       wsData.push([i===0?code:'',i===0?a.nom:'',i===0?a.codeFourn:'',chantier,qty,i===0&&a.prix>0?a.prix:'',i===0&&a.prix>0?(a.totalQty*a.prix).toFixed(2):'']);
     });
   });
@@ -7909,7 +7988,7 @@ function exportReapproAll(){
   Object.entries(data).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([fourn,arts])=>{
     const wsData=[['CODE DELAMOTTE','DÉSIGNATION','CODE FOURNISSEUR','CHANTIER','QTÉ','PRIX U.','TOTAL HT']];
     Object.entries(arts).forEach(([code,a])=>{
-      Object.entries(a.chantiers).forEach(([chantier,qty],i)=>{
+      reapproLignes(a.chantiers).forEach(([chantier0,qty,det],i)=>{const chantier=chantier0+(det?' ('+det+')':'');
         wsData.push([i===0?code:'',i===0?a.nom:'',i===0?a.codeFourn:'',chantier,qty,i===0&&a.prix>0?a.prix:'',i===0&&a.prix>0?(a.totalQty*a.prix).toFixed(2):'']);
       });
     });
@@ -8052,7 +8131,7 @@ function renderHistoriqueCommandes(){
               <thead><tr><th>Code</th><th>Désignation</th><th>Code fourn.</th><th>Chantier(s)</th><th>Qté</th><th>Prix U.</th><th>Total HT</th></tr></thead>
               <tbody>
                 ${(doc.articles||[]).map(a=>{
-                  const chStr=a.chantiers?Object.entries(a.chantiers).map(([ch,q])=>{
+                  const chStr=a.chantiers?reapproLignes(a.chantiers).map(([ch0,q,det])=>{const ch=ch0+(det?' ('+det+')':'');
                     const m=a.prix>0?(q*a.prix).toFixed(2)+' €':'';
                     return '<span style="display:block">'+ch+': <b>'+q+'</b>'+(m?' — <span style="color:var(--green)">'+m+'</span>':'')+'</span>';
                   }).join(''):'';
