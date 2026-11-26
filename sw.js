@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delamotte-v11';
+const CACHE_NAME = 'delamotte-v12';
 self.addEventListener('install', e => {
   self.skipWaiting();
 });

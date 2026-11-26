@@ -497,19 +497,6 @@ const db = firebase.firestore();
     </div>
     <div id="backupInfo" style="font-size:0.75rem;color:var(--muted);margin-top:8px"></div>
   </div>
-  <!-- GESTION CHANTIERS -->
-      <div class="user-form" style="margin-top:20px">
-        <h3>🏗️ Gros chantiers</h3>
-        <div class="user-form-grid" style="margin-bottom:10px">
-          <input type="text" id="newChantierName" placeholder="Nom du chantier *">
-          <select id="newChantierConducteur">
-            <option value="">-- Conducteur de travaux --</option>
-          </select>
-        </div>
-        <button class="btn-save-user" onclick="addChantier()">➕ Ajouter le chantier</button>
-        <input type="hidden" id="editChantierOrig">
-        <div id="chantiersList" style="margin-top:12px"></div>
-      </div>
     </div>
   <!-- SUIVI CHANTIERS -->
   <div id="tabSuivi" style="display:none">
@@ -527,7 +514,27 @@ const db = firebase.firestore();
   <div id="tabReappro" style="display:none">
     <div id="reapproContent"></div>
   </div>
-    <div id="tabChantiers" style="display:none"><div id="chantiersTabContent"></div></div>
+    <div id="tabChantiers" style="display:none">
+    <div id="chSvcToggle" style="display:none;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <button id="chTabGros" class="art-tabbtn" onclick="chSetSvc('gros')">🔵 Gros chantiers</button>
+      <button id="chTabPart" class="art-tabbtn" onclick="chSetSvc('particulier')">🔴 Service 001 Particulier</button>
+    </div>
+    <div id="chantiersGrosBlock" style="display:none">
+      <div class="user-form">
+        <h3>🏗️ Gros chantiers</h3>
+        <div class="user-form-grid" style="margin-bottom:10px">
+          <input type="text" id="newChantierName" placeholder="Nom du chantier *">
+          <select id="newChantierConducteur">
+            <option value="">-- Conducteur de travaux --</option>
+          </select>
+        </div>
+        <button class="btn-save-user" onclick="addChantier()">➕ Ajouter le chantier</button>
+        <input type="hidden" id="editChantierOrig">
+        <div id="chantiersList" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div id="chantiersTabContent"></div>
+  </div>
     <div id="tabCouts" style="display:none"><div id="costSection"></div></div>
   </div><!-- fin .main -->
   <div class="bottom-nav">
@@ -6321,6 +6328,20 @@ function navSubRender(tab){
   const c=document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)); if(!c) return;
   c.insertAdjacentHTML('afterbegin','<div class="subnav">'+its.map(function(it){ return '<button class="'+(it.tab===tab?'on':'')+'" onclick="'+(it.panel?'artOpen()':'showTab(\''+it.tab+'\')')+'">'+it.sub+'</button>'; }).join('')+'</div>');
 }
+// ===== PAGE CHANTIERS (Réglages) : gros chantiers et service 001 Particulier au même endroit =====
+let chSvc='gros';
+function chSetSvc(s){ chSvc=s; chantiersPageRender(); }
+function chantiersPageRender(){
+  const adm=currentRole==='admin';
+  if(!adm) chSvc='particulier';   // un conducteur du service 001 ne gère que les chantiers particulier
+  document.getElementById('chSvcToggle').style.display=adm?'flex':'none';
+  document.getElementById('chTabGros').className='art-tabbtn'+(chSvc==='gros'?' on':'');
+  document.getElementById('chTabPart').className='art-tabbtn'+(chSvc==='particulier'?' on':'');
+  document.getElementById('chantiersGrosBlock').style.display=(adm&&chSvc==='gros')?'block':'none';
+  document.getElementById('chantiersTabContent').style.display=chSvc==='particulier'?'block':'none';
+  if(adm&&chSvc==='gros') renderChantiers();
+  if(chSvc==='particulier') renderChantiersTab();
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -6334,13 +6355,13 @@ function showTab(tab){
   document.getElementById('tabCouts').style.display=tab==='couts'?'block':'none';
   navCur=tab; navHighlight(tab); navSubRender(tab);
   if(tab==='orders') renderOrders();
-  if(tab==='users'){renderUsers();renderChantiers();}
+  if(tab==='users'){renderUsers();}
   if(tab==='suivi') renderSuivi();
   if(tab==='stats') ensureAllOrders().then(renderStats);
   if(tab==='corbeille') renderCorbeille();
   if(tab==='inventaire') renderInventaire();
   if(tab==='reappro') renderReappro();
-  if(tab==='chantiers') renderChantiersTab();
+  if(tab==='chantiers') chantiersPageRender();
   if(tab==='couts') costEnsure().then(renderCostSection);
 }
 function setBnav(tab){ navHighlight(tab); }
