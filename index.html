@@ -6797,7 +6797,16 @@ const OUTBOX_KEY='delamotte_outbox';
 let ORDER_SEND_TIMEOUT=15000, outboxBusy=false, sendingOrder=false;
 function outboxGet(){ try{return JSON.parse(localStorage.getItem(OUTBOX_KEY)||'[]');}catch(e){return [];} }
 function outboxSet(a){ try{localStorage.setItem(OUTBOX_KEY,JSON.stringify(a));}catch(e){} outboxUpdateUI(); }
-function isNetErr(e){ return !!e&&(e.code==='unavailable'||e.code==='deadline-exceeded'||e.code==='network'||/offline|network|unavailable|timeout/i.test(String(e.message||e))); }
+function isNetErr(e){ return !!e&&(e.code==='unavailable'||e.code==='deadline-exceeded'||e.code==='network'||e.code==='aborted'||/offline|network|unavailable|timeout/i.test(String(e.message||e))); }
+// raison lisible d'un échec d'envoi (affichée à l'écran et gardée pour le diagnostic)
+function sendErrLabel(e){
+  const c=(e&&e.code)||'';
+  try{ localStorage.setItem('delamotte_lasterr',JSON.stringify({code:c,msg:String((e&&e.message)||e).slice(0,200),at:new Date().toISOString()})); }catch(x){}
+  if(c==='permission-denied') return 'refusé par les règles de la base (permission-denied)';
+  if(c==='resource-exhausted') return 'quota Firebase du jour dépassé (resource-exhausted)';
+  return c||String((e&&e.message)||e).slice(0,60);
+}
+
 function outboxUpdateUI(){
   const bar=document.getElementById('offlineBar'); if(bar) bar.style.display=navigator.onLine===false?'block':'none';
   const box=document.getElementById('outboxBox'); if(!box) return;
@@ -6823,23 +6832,57 @@ function orderEmail(id,p){
 }
 // crée la commande ; une commande venant de la file d'attente vérifie d'abord qu'un envoi précédent n'a pas déjà abouti (aucun doublon)
 function submitOrder(p){
-  // 1 transaction = ticket unique de la commande + numéro + commande : si la commande existe déjà (envoi qui avait fini par aboutir, deux fenêtres, deux essais qui se croisent…), la base la reconnaît et NE LA RECRÉE JAMAIS
-  const create=function(){
-    const cref=db.collection('meta').doc('counter'), kref=db.collection('order_cids').doc(p.cid);
+  const cref=db.collection('meta').doc('counter'), kref=db.collection('order_cids').doc(p.cid);
+  const build=function(id){
+    const order={id,chantier:p.chantier,service:p.service,chef:p.chef,date:p.date,comment:p.comment,livraison:p.livraison,items:p.items,status:'pending',user:p.user,createdAt:p.queued?new Date().toISOString():p.createdAt,deleted:false,cid:p.cid};
+    if(p.queued) order.queuedAt=p.createdAt;
+    return order;
+  };
+  const nextId=function(doc){ const current=(doc.exists?doc.data().count:0)+1; return {current:current,id:'CMD-'+String(current).padStart(4,'0')}; };
+  // 1) transaction avec ticket unique : une commande ne peut jamais être créée deux fois
+  const withTicket=function(){
     return db.runTransaction(function(tx){
       return tx.get(kref).then(function(k){
         if(k.exists) return {id:k.data().id,dup:true};
         return tx.get(cref).then(function(doc){
-          const current=(doc.exists?doc.data().count:0)+1, id='CMD-'+String(current).padStart(4,'0');
-          const order={id,chantier:p.chantier,service:p.service,chef:p.chef,date:p.date,comment:p.comment,livraison:p.livraison,items:p.items,status:'pending',user:p.user,createdAt:p.queued?new Date().toISOString():p.createdAt,deleted:false,cid:p.cid};
-          if(p.queued) order.queuedAt=p.createdAt;
-          tx.set(db.collection('orders').doc(id),order);
-          tx.set(cref,{count:current});
-          tx.set(kref,{id:id,at:new Date().toISOString()});
-          return {id:id,dup:false};
+          const n=nextId(doc);
+          tx.set(db.collection('orders').doc(n.id),build(n.id)); tx.set(cref,{count:n.current}); tx.set(kref,{id:n.id,at:new Date().toISOString()});
+          return {id:n.id,dup:false};
         });
       });
-    }).then(function(r){ if(!r.dup) orderEmail(r.id,p); return r.id; });
+    });
+  };
+  // 2) transaction sans ticket (numéro toujours attribué sans conflit)
+  const noTicket=function(){
+    return db.runTransaction(function(tx){
+      return tx.get(cref).then(function(doc){
+        const n=nextId(doc);
+        tx.set(db.collection('orders').doc(n.id),build(n.id)); tx.set(cref,{count:n.current});
+        return {id:n.id,dup:false};
+      });
+    });
+  };
+  // 3) méthode d'origine (lecture du compteur + écriture groupée)
+  const legacy=function(){
+    return cref.get().then(function(doc){
+      const n=nextId(doc), batch=db.batch();
+      batch.set(db.collection('orders').doc(n.id),build(n.id)); batch.set(cref,{count:n.current});
+      return batch.commit().then(function(){ return {id:n.id,dup:false}; });
+    });
+  };
+  const hard=function(e){ return !isNetErr(e)&&!(e&&e.code==='resource-exhausted'); };   // erreur autre que réseau / quota : on tente la méthode suivante
+  const skipTicket=function(){ try{ const t=Date.parse(localStorage.getItem('delamotte_noticket')||''); return !isNaN(t)&&Date.now()-t<86400000; }catch(e){ return false; } };
+  const create=function(){
+    let step;
+    try{
+      step=skipTicket()?noTicket():withTicket().catch(function(e){
+        if(!hard(e)) throw e;
+        if(e&&e.code==='permission-denied'){ try{localStorage.setItem('delamotte_noticket',new Date().toISOString());}catch(x){} }   // la base refuse le ticket : on n'insiste pas pendant 24 h
+        return noTicket();
+      });
+    }catch(e){ step=Promise.reject(e); }
+    return step.catch(function(e){ if(!hard(e)) throw e; return legacy(); })
+      .then(function(r){ if(!r.dup) orderEmail(r.id,p); return r.id; });
   };
   if(!p.queued) return create();
   // file d'attente : vérification supplémentaire pour les commandes créées avant l'introduction du ticket
@@ -6865,8 +6908,9 @@ function sendOrder(){
   if(navigator.onLine===false){ queue(); return; }
   sendingOrder=true;
   timer=setTimeout(queue,ORDER_SEND_TIMEOUT);   // réseau trop lent : on garde la commande plutôt que de laisser l'écran bloqué
-  submitOrder(p).then(function(id){ if(finished) return; end(); showToast('Commande '+id+' envoyée !'); })
-    .catch(function(e){ if(finished) return; if(isNetErr(e)) queue(); else { sendingOrder=false; clearTimeout(timer); showToast('Erreur envoi commande'); } });
+  let pr; try{ pr=submitOrder(p); }catch(e){ pr=Promise.reject(e); }
+  pr.then(function(id){ if(finished) return; end(); showToast('Commande '+id+' envoyée !'); })
+    .catch(function(e){ if(finished) return; if(isNetErr(e)) queue(); else { sendingOrder=false; clearTimeout(timer); showToast('❌ Commande non envoyée : '+sendErrLabel(e)); } });
 }
 const TABID=Math.random().toString(36).slice(2), LOCK_KEY='delamotte_outbox_lock';
 function outboxLockRead(){ try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null');}catch(e){return null;} }
