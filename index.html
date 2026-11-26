@@ -5547,27 +5547,11 @@ function updateCartServiceUI(){
   const lv=document.getElementById('livraisonBlock'); if(lv) lv.style.display=svc==='particulier'?'none':'';
 }
 
+// mémorise la dernière visite ; le résumé « nouvelles commandes depuis ta dernière visite » est affiché quand les commandes sont chargées (voir ordersMerge)
+let prevLastVisit=0;
 function checkNewOrders(){
-  const lastVisit=parseInt(localStorage.getItem('delamotte_lastvisit')||'0');
+  prevLastVisit=parseInt(localStorage.getItem('delamotte_lastvisit')||'0');
   localStorage.setItem('delamotte_lastvisit', Date.now());
-  if(lastVisit===0) return;
-  const orders=getOrders();
-  const newOrders=orders.filter(o=>{
-    const ts=new Date(o.date.split(' ').reverse().join('T')).getTime();
-    return o.status==='pending' && ts>lastVisit;
-  });
-  if(newOrders.length===0) return;
-  const msg=newOrders.length===1
-    ? `📦 Nouvelle commande : ${newOrders[0].id} — ${newOrders[0].chantier}`
-    : `📦 ${newOrders.length} nouvelles commandes en attente !`;
-  if('Notification' in window && Notification.permission==='granted'){
-    new Notification('DELAMOTTE – Nouvelle commande', {body: msg, icon:'logo.png'});
-  } else if('Notification' in window && Notification.permission!=='denied'){
-    Notification.requestPermission().then(p=>{
-      if(p==='granted') new Notification('DELAMOTTE – Nouvelle commande', {body: msg, icon:'logo.png'});
-    });
-  }
-  showToast(msg);
 }
 document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 document.getElementById('loginUser').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
@@ -6371,19 +6355,33 @@ function updateDoneBadge(){
 }
 // en quittant la page Commandes, les nouveautés sont considérées comme vues
 function doneLeaveOrders(){ doneSeenPrev=new Date().toISOString(); try{localStorage.setItem(doneKey(),doneSeenPrev);}catch(e){} }
+// affiche une notification du téléphone MAINTENANT (méthode compatible Android / iPhone : via le service worker)
+function notifyNow(title,body){
+  try{
+    if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration)
+      return navigator.serviceWorker.getRegistration().then(function(r){ if(r&&r.showNotification) return r.showNotification(title,{body:body,tag:'delamotte-'+Date.now()}); try{ new Notification(title,{body:body}); }catch(e){} }).catch(function(){});
+    new Notification(title,{body:body});
+  }catch(e){}
+  return Promise.resolve();
+}
+// seulement quand l'appli est en arrière-plan (au premier plan, le message à l'écran suffit)
 function sysNotify(title,body){
   if(!('Notification' in window)||Notification.permission!=='granted'||!document.hidden) return;
-  try{
-    if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function(r){ if(r&&r.showNotification) r.showNotification(title,{body:body}); else new Notification(title,{body:body}); });
-    else new Notification(title,{body:body});
-  }catch(e){}
+  notifyNow(title,body);
 }
+
 function notifBarRender(){
   const el=document.getElementById('notifBar'); if(!el) return;
-  const ok=('Notification' in window)&&Notification.permission==='default';
-  el.style.display=ok?'block':'none';
-  if(ok) el.innerHTML='<div style="background:#e8f4fd;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:0.82rem"><span>🔔 Être prévenu quand une commande est traitée ou qu\'un message arrive</span><button class="btn-print" style="background:var(--blue)" onclick="notifEnable()">Activer</button></div>';
+  if(!('Notification' in window)){ el.style.display='none'; return; }
+  const p=Notification.permission, box='border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:0.82rem;';
+  const what=currentRole==='admin'?'une commande arrive ou qu\'un message arrive':'une commande est traitée ou qu\'un message arrive';
+  el.style.display='block';
+  if(p==='default') el.innerHTML='<div style="background:#e8f4fd;'+box+'"><span>🔔 Être prévenu quand '+what+'</span><button class="btn-print" style="background:var(--blue)" onclick="notifEnable()">Activer</button></div>';
+  else if(p==='granted') el.innerHTML='<div style="background:#eafaf1;color:#1e8449;'+box+'"><span>🔔 Notifications activées — elles arrivent quand l\'appli est ouverte en arrière-plan (pas si elle est fermée)</span><button class="btn-print" style="background:#27ae60" onclick="notifTest()">Tester</button></div>';
+  else el.innerHTML='<div style="background:#fdecea;color:#c0392b;'+box+'"><span>🔕 Notifications bloquées sur cet appareil : autorisez-les dans les réglages du navigateur (cadenas à côté de l\'adresse, ou réglages de l\'appli)</span></div>';
 }
+function notifTest(){ notifyNow('DELAMOTTE — test','Si vous voyez ce message, les notifications fonctionnent sur ce téléphone ✅'); showToast('🔔 Notification de test envoyée — regardez en haut de l’écran'); }
+
 function notifEnable(){ try{ Notification.requestPermission().then(function(p){ notifBarRender(); showToast(p==='granted'?'🔔 Notifications activées':'Notifications non activées'); }); }catch(e){} }
 // ===== RESTE À RECEVOIR : alerte au bout de 7 jours (rouge sur la commande, bandeau, filtre « À relancer », carte admin, message du jour) =====
 const RESTE_ALERT_DAYS=7;
@@ -6966,7 +6964,7 @@ function ordersCutoff(){ return new Date(Date.now()-ORDERS_WINDOW_DAYS*86400000)
 function stopOrderListeners(){
   ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
   if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
-  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null;
+  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null; newOrdSeen=null;
 }
 function ordersMerge(){
   const m={}; ordersOlder.concat(ordersRes,ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
@@ -6981,6 +6979,16 @@ function ordersMerge(){
     const mine=currentRole==='admin'?[]:vis.filter(function(o){return o.user===currentUser;});
     if(doneSeenIds!==null) mine.forEach(function(o){ if(o.status==='done'&&!doneSeenIds[o.id]){ showToast('✅ Commande '+o.id+' ('+o.chantier+') traitée'); sysNotify('Commande traitée',o.id+' — '+o.chantier); } });
     doneSeenIds={}; mine.forEach(function(o){ if(o.status==='done') doneSeenIds[o.id]=1; });
+    // admin : une NOUVELLE commande vient d'arriver (envoyée par un chef, ou arrivée après un passage hors réseau)
+    if(currentRole==='admin'){
+      const pend=vis.filter(function(o){return o.status==='pending';});
+      if(newOrdSeen===null&&prevLastVisit>0){   // résumé à l'ouverture : ce qui est arrivé depuis la dernière visite
+        const fresh=pend.filter(function(o){return o.user!==currentUser&&Date.parse(o.createdAt||0)>prevLastVisit;});
+        if(fresh.length) showToast(fresh.length===1?'📦 Nouvelle commande : '+fresh[0].id+' — '+fresh[0].chantier:'📦 '+fresh.length+' nouvelles commandes depuis ta dernière visite');
+      }
+      if(newOrdSeen!==null) pend.forEach(function(o){ if(!newOrdSeen[o.id]&&o.user!==currentUser&&!(o.reopenedBy===currentUser&&Date.now()-Date.parse(o.reopenedAt||0)<120000)){ showToast('📦 Nouvelle commande '+o.id+' — '+o.chantier); sysNotify('Nouvelle commande',o.id+' — '+o.chantier); } });
+      newOrdSeen={}; pend.forEach(function(o){ newOrdSeen[o.id]=1; });
+    }
   }
   orders.forEach(function(o){ if((o.reste||[]).length&&o.hasReste===undefined&&!hasResteFixed[o.id]&&(currentRole==='admin'||o.user===currentUser)){ hasResteFixed[o.id]=1; db.collection('orders').doc(o.id).update({hasReste:true}).catch(function(){}); } });
   if(ordersReady.rec&&ordersReady.pen) setTimeout(resteDailyAlert,600);
@@ -8664,7 +8672,7 @@ function exportExcelNow(){
 let currentCommentOrderId=null;
 let commentListener=null;
 // ===== COMMENTAIRES : le dernier message et le nombre figurent sur la commande ; « nouveau » tant qu'on n'a pas ouvert le fil =====
-let cmtSeen=null;
+let cmtSeen=null, newOrdSeen=null;
 function cmtReadMap(){ try{return JSON.parse(localStorage.getItem('delamotte_cread_'+currentUser)||'{}');}catch(e){return {};} }
 function cmtUnread(o){ const lc=o&&o.lastComment; if(!lc||lc.user===currentUser) return false; const r=cmtReadMap()[o.id]; return !r||lc.at>r; }
 function cmtMarkRead(id){ const o=getOrders().find(function(x){return x.id===id;}), m=cmtReadMap(), t=new Date().toISOString(); m[id]=(o&&o.lastComment&&o.lastComment.at>t)?o.lastComment.at:t; try{localStorage.setItem('delamotte_cread_'+currentUser,JSON.stringify(m));}catch(e){} }
