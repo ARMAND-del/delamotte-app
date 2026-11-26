@@ -324,6 +324,7 @@ const db = firebase.firestore();
   .dark-toggle{background:rgba(255,255,255,0.15);border:none;color:var(--white);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:1rem;}
   /* NOTIFICATION BADGE */
   .nav-tab{position:relative;}
+  .done-new-tag{background:#27ae60;color:#fff;border-radius:10px;padding:2px 8px;font-size:0.7rem;font-weight:800;margin-right:6px;}
   .cmt-prev{background:var(--gray);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:0.78rem;cursor:pointer;border-left:3px solid var(--blue);}
   .cmt-prev.new{border-left-color:var(--orange);background:#fff3cd;color:#856404;}
   .subnav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px 0;}
@@ -410,7 +411,7 @@ const db = firebase.firestore();
   </div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-nav="catalogue" onclick="showTab('catalogue')">&#128230; Catalogue</button>
-    <button class="nav-tab" data-nav="orders" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span><span id="commentsNavBadge" title="Nouveaux messages" style="display:none;background:#2980b9;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">💬 0</span></button>
+    <button class="nav-tab" data-nav="orders" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span><span id="commentsNavBadge" title="Nouveaux messages" style="display:none;background:#2980b9;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">💬 0</span><span id="doneNavBadge" title="Commandes traitées" style="display:none;background:#27ae60;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">✅ 0</span></button>
     <button class="nav-tab" id="nav-g-suivi" data-nav="g:suivi" style="display:none" onclick="navGo('suivi')"></button>
     <button class="nav-tab" id="nav-g-stock" data-nav="g:stock" style="display:none" onclick="navGo('stock')"></button>
     <button class="nav-tab" id="nav-g-reglages" data-nav="g:reglages" style="display:none" onclick="navGo('reglages')"></button>
@@ -438,6 +439,7 @@ const db = firebase.firestore();
         <button onclick="openRetourModal()" style="padding:9px 14px;background:#e67e22;color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">↩️ Nouveau bon de retour</button>
         <button onclick="openRetoursList()" style="padding:9px 14px;background:var(--white);color:var(--text);border:2px solid var(--border);border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📋 Bons de retour <span id="retoursBadge"></span></button>
       </div>
+      <div id="notifBar" style="display:none"></div>
       <div class="stats-bar" id="statsBar"></div>
       <div class="filter-bar" id="filterBar"></div>
       <div id="dateFilterBar" style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
@@ -542,7 +544,7 @@ const db = firebase.firestore();
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
       <button class="bnav-btn active" id="bnav-catalogue" data-nav="catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
-      <button class="bnav-btn" id="bnav-orders" data-nav="orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavCommentsBadge" style="display:none;position:absolute;top:24px;right:calc(50% - 24px);background:#2980b9;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
+      <button class="bnav-btn" id="bnav-orders" data-nav="orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavCommentsBadge" style="display:none;position:absolute;top:24px;right:calc(50% - 24px);background:#2980b9;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavDoneBadge" style="display:none;position:absolute;top:24px;left:calc(50% - 24px);background:#27ae60;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
       <button class="bnav-btn" id="bnav-g-suivi" data-nav="g:suivi" style="display:none" onclick="navGo('suivi')"></button>
       <button class="bnav-btn" id="bnav-g-stock" data-nav="g:stock" style="display:none" onclick="navGo('stock')"></button>
       <button class="bnav-btn" id="bnav-g-reglages" data-nav="g:reglages" style="display:none" onclick="navGo('reglages')"></button>
@@ -5145,6 +5147,7 @@ function startSession(u){
   listenRetours();
   // Restore saved cart
   setTimeout(loadCart, 800);
+  doneInit();
   if(currentRole==='admin'&&artInvWindow(new Date())) setTimeout(function(){ showToast('📅 Inventaire du 30/09 : pensez à figer le stock (Stock → Bilan & articles → Arrêtés)'); },2500);
 }
 function getExtraUsers(){try{return JSON.parse(localStorage.getItem('delamotte_extra_users')||'{}');}catch{return{};}}
@@ -6346,6 +6349,33 @@ function chantiersPageRender(){
   if(adm&&chSvc==='gros') renderChantiers();
   if(chSvc==='particulier') renderChantiersTab();
 }
+// ===== NOTIFICATIONS : « commande traitée » (pastille, surlignage, alerte, notification du téléphone) =====
+let doneSeenPrev=null, doneSeenIds=null;
+function doneKey(){ return 'delamotte_seendone_'+currentUser; }
+function doneInit(){ let v=null; try{v=localStorage.getItem(doneKey());}catch(e){} if(!v){ v=new Date().toISOString(); try{localStorage.setItem(doneKey(),v);}catch(e){} } doneSeenPrev=v; }
+function fmtDT(iso){ const d=new Date(iso); if(isNaN(d)) return ''; const p=function(n){return String(n).padStart(2,'0');}; return p(d.getDate())+'/'+p(d.getMonth()+1)+' à '+p(d.getHours())+':'+p(d.getMinutes()); }
+function isNewDone(o){ return currentRole!=='admin'&&!!o&&o.status==='done'&&o.user===currentUser&&!!o.processedAt&&o.processedAt>(doneSeenPrev||'9'); }
+function updateDoneBadge(){
+  const n=navCur==='orders'?0:getVisibleOrders(getOrders()).filter(isNewDone).length, t=document.getElementById('doneNavBadge'), b=document.getElementById('bnavDoneBadge');
+  if(t){ t.style.display=n?'inline-block':'none'; t.textContent='✅ '+n; }
+  if(b){ b.style.display=n?'flex':'none'; b.textContent=n; }
+}
+// en quittant la page Commandes, les nouveautés sont considérées comme vues
+function doneLeaveOrders(){ doneSeenPrev=new Date().toISOString(); try{localStorage.setItem(doneKey(),doneSeenPrev);}catch(e){} }
+function sysNotify(title,body){
+  if(!('Notification' in window)||Notification.permission!=='granted'||!document.hidden) return;
+  try{
+    if(navigator.serviceWorker&&navigator.serviceWorker.getRegistration) navigator.serviceWorker.getRegistration().then(function(r){ if(r&&r.showNotification) r.showNotification(title,{body:body}); else new Notification(title,{body:body}); });
+    else new Notification(title,{body:body});
+  }catch(e){}
+}
+function notifBarRender(){
+  const el=document.getElementById('notifBar'); if(!el) return;
+  const ok=('Notification' in window)&&Notification.permission==='default';
+  el.style.display=ok?'block':'none';
+  if(ok) el.innerHTML='<div style="background:#e8f4fd;border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:0.82rem"><span>🔔 Être prévenu quand une commande est traitée ou qu\'un message arrive</span><button class="btn-print" style="background:var(--blue)" onclick="notifEnable()">Activer</button></div>';
+}
+function notifEnable(){ try{ Notification.requestPermission().then(function(p){ notifBarRender(); showToast(p==='granted'?'🔔 Notifications activées':'Notifications non activées'); }); }catch(e){} }
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -6357,7 +6387,8 @@ function showTab(tab){
   document.getElementById('tabReappro').style.display=tab==='reappro'?'block':'none';
   document.getElementById('tabChantiers').style.display=tab==='chantiers'?'block':'none';
   document.getElementById('tabCouts').style.display=tab==='couts'?'block':'none';
-  navCur=tab; navHighlight(tab); navSubRender(tab);
+  if(navCur==='orders'&&tab!=='orders') doneLeaveOrders();
+  navCur=tab; navHighlight(tab); navSubRender(tab); updateDoneBadge();
   if(tab==='orders') renderOrders();
   if(tab==='users'){renderUsers();}
   if(tab==='suivi') renderSuivi();
@@ -6780,7 +6811,7 @@ function ordersCutoff(){ return new Date(Date.now()-ORDERS_WINDOW_DAYS*86400000)
 function stopOrderListeners(){
   ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
   if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
-  ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null;
+  ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null;
 }
 function ordersMerge(){
   const m={}; ordersOlder.concat(ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
@@ -6789,8 +6820,12 @@ function ordersMerge(){
   // nouveau message sur une de mes commandes : alerte (jamais au chargement initial, ni pour mes propres messages)
   if(ordersReady.rec&&ordersReady.pen){
     const vis=getVisibleOrders(orders);
-    if(cmtSeen!==null) vis.forEach(function(o){ const lc=o.lastComment; if(lc&&lc.user!==currentUser&&lc.at>(cmtSeen[o.id]||'')) showToast('💬 '+lc.user+' ('+o.id+') : '+String(lc.text).slice(0,60)); });
+    if(cmtSeen!==null) vis.forEach(function(o){ const lc=o.lastComment; if(lc&&lc.user!==currentUser&&lc.at>(cmtSeen[o.id]||'')) { showToast('💬 '+lc.user+' ('+o.id+') : '+String(lc.text).slice(0,60)); sysNotify('Nouveau message ('+o.id+')',lc.user+' : '+String(lc.text).slice(0,80)); } });
     cmtSeen={}; vis.forEach(function(o){ if(o.lastComment) cmtSeen[o.id]=o.lastComment.at; });
+    // une de MES commandes vient d'être traitée : alerte (jamais au chargement initial)
+    const mine=currentRole==='admin'?[]:vis.filter(function(o){return o.user===currentUser;});
+    if(doneSeenIds!==null) mine.forEach(function(o){ if(o.status==='done'&&!doneSeenIds[o.id]){ showToast('✅ Commande '+o.id+' ('+o.chantier+') traitée'); sysNotify('Commande traitée',o.id+' — '+o.chantier); } });
+    doneSeenIds={}; mine.forEach(function(o){ if(o.status==='done') doneSeenIds[o.id]=1; });
   }
   renderOrders();updateOrdersBadge();renderDashboard();updateCommentBadge();
   if(currentCat===FAV_CAT) filterProducts();   // « souvent commandés » suit les nouvelles commandes
@@ -6845,6 +6880,7 @@ function renderOrders(){
   const pending=vis.filter(o=>o.status==='pending').length;
   const cutW=ordersCutoff(), visW=vis.filter(o=>o.status==='pending'||String(o.createdAt||'')>=cutW), done=visW.filter(o=>o.status==='done').length;   // compteurs : 35 derniers jours + en attente (identiques PC / téléphone)
   updateOrdersBadge();
+  notifBarRender(); updateDoneBadge();
   renderDashboard();
   document.getElementById('statsBar').innerHTML=`
     <div class="stat-card"><div class="stat-num">${visW.length}</div><div class="stat-label">Total (35 j)</div></div>
@@ -6852,7 +6888,7 @@ function renderOrders(){
     <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`;
   document.getElementById('filterBar').innerHTML=['all','pending','done'].map(f=>`
     <button class="filter-btn${orderFilter===f?' active':''}" onclick="setFilter('${f}')">
-      ${f==='all'?'Toutes':f==='pending'?'En attente':'Traitees'}</button>`).join('');
+      ${f==='all'?'Toutes':f==='pending'?'En attente':'Traitées'}</button>`).join('');
   let filtered=getVisibleOrders(all);
   if(orderFilter==='pending')filtered=filtered.filter(o=>o.status==='pending');
   if(orderFilter==='done')filtered=filtered.filter(o=>o.status==='done');
@@ -6874,7 +6910,7 @@ function renderOrders(){
     <div class="order-card">
       <div class="order-top">
         <span class="order-id">${o.id}</span>
-        <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitee':'En attente'}</span>
+        ${isNewDone(o)?'<span class="done-new-tag">● nouvelle</span>':''}<span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'✅ Traitée'+(o.processedAt?' le '+fmtDT(o.processedAt):''):'En attente'}</span>
       </div>
       <div class="order-info"><b>${o.chantier}</b> - ${o.chef} - ${o.date} ${(()=>{const s=orderSvc(o);return '<span style="background:'+(s==='particulier'?'#fdecea':'#e8f4fd')+';color:'+(s==='particulier'?'#c0392b':'#2980b9')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(s==='particulier'?'🔴 001 Particulier':'🔵 Gros chantier')+'</span>';})()} ${o.livraison?'<span style="background:'+(o.livraison==='chantier'?'#e8f4fd':'#e8f8e8')+';color:'+(o.livraison==='chantier'?'#2980b9':'#27ae60')+';padding:1px 7px;border-radius:10px;font-size:0.72rem;font-weight:700">'+(o.livraison==='chantier'?'🏗️ Chantier':'🏭 Entreprise')+'</span>':''}</div>
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
@@ -7694,7 +7730,7 @@ function renderSuivi(){
           ${cmtPreviewHtml(o)}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitée':'En attente'}</span>
+          <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'✅ Traitée'+(o.processedAt?' le '+fmtDT(o.processedAt):''):'En attente'}</span>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:#27ae60" onclick="reorderOrder('${o.id}')" title="Recommander : remettre ces références dans mon panier">🔁</button>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem" onclick="printOrder('${o.id}')">🖨️</button>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:var(--muted)" onclick="openCommentModal('${o.id}')">${cmtBtnLabel(o,false)}</button>
