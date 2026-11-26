@@ -324,6 +324,8 @@ const db = firebase.firestore();
   .dark-toggle{background:rgba(255,255,255,0.15);border:none;color:var(--white);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:1rem;}
   /* NOTIFICATION BADGE */
   .nav-tab{position:relative;}
+  .cmt-prev{background:var(--gray);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:0.78rem;cursor:pointer;border-left:3px solid var(--blue);}
+  .cmt-prev.new{border-left-color:var(--orange);background:#fff3cd;color:#856404;}
   .subnav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px 0;}
   .subnav button{padding:8px 16px;border-radius:20px;border:2px solid var(--border);background:var(--white);color:var(--muted);font-weight:700;font-size:0.84rem;cursor:pointer;}
   .subnav button.on{background:var(--blue);color:#fff;border-color:var(--blue);}
@@ -408,7 +410,7 @@ const db = firebase.firestore();
   </div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-nav="catalogue" onclick="showTab('catalogue')">&#128230; Catalogue</button>
-    <button class="nav-tab" data-nav="orders" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span></button>
+    <button class="nav-tab" data-nav="orders" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span><span id="commentsNavBadge" title="Nouveaux messages" style="display:none;background:#2980b9;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">💬 0</span></button>
     <button class="nav-tab" id="nav-g-suivi" data-nav="g:suivi" style="display:none" onclick="navGo('suivi')"></button>
     <button class="nav-tab" id="nav-g-stock" data-nav="g:stock" style="display:none" onclick="navGo('stock')"></button>
     <button class="nav-tab" id="nav-g-reglages" data-nav="g:reglages" style="display:none" onclick="navGo('reglages')"></button>
@@ -540,7 +542,7 @@ const db = firebase.firestore();
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
       <button class="bnav-btn active" id="bnav-catalogue" data-nav="catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
-      <button class="bnav-btn" id="bnav-orders" data-nav="orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
+      <button class="bnav-btn" id="bnav-orders" data-nav="orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavCommentsBadge" style="display:none;position:absolute;top:24px;right:calc(50% - 24px);background:#2980b9;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
       <button class="bnav-btn" id="bnav-g-suivi" data-nav="g:suivi" style="display:none" onclick="navGo('suivi')"></button>
       <button class="bnav-btn" id="bnav-g-stock" data-nav="g:stock" style="display:none" onclick="navGo('stock')"></button>
       <button class="bnav-btn" id="bnav-g-reglages" data-nav="g:reglages" style="display:none" onclick="navGo('reglages')"></button>
@@ -661,6 +663,7 @@ const db = firebase.firestore();
       <button id="artTabBil" class="art-tabbtn" onclick="artSetMode('bil')">📦 Bilan du stock</button>
       <button id="artTabRap" class="art-tabbtn" onclick="artSetMode('rap')">📊 Consommation</button>
       <button id="artTabFic" class="art-tabbtn" onclick="artSetMode('fic')">🔎 Fiche article</button>
+      <button id="artTabArr" class="art-tabbtn" onclick="artSetMode('arr')">🔒 Arrêtés d'inventaire</button>
     </div>
     <div id="artBody"></div>
   </div>
@@ -5142,6 +5145,7 @@ function startSession(u){
   listenRetours();
   // Restore saved cart
   setTimeout(loadCart, 800);
+  if(currentRole==='admin'&&artInvWindow(new Date())) setTimeout(function(){ showToast('📅 Inventaire du 30/09 : pensez à figer le stock (Stock → Bilan & articles → Arrêtés)'); },2500);
 }
 function getExtraUsers(){try{return JSON.parse(localStorage.getItem('delamotte_extra_users')||'{}');}catch{return{};}}
 function saveExtraUsers(u){localStorage.setItem('delamotte_extra_users',JSON.stringify(u));}
@@ -6771,31 +6775,38 @@ function ownDataOnly(){ return currentRole==='chef'||currentRole==='particulier'
 // On ne charge que les commandes des 35 derniers jours + toutes les commandes en attente ; l'historique complet se charge à la demande.
 const ORDERS_WINDOW_DAYS=35;
 let ordersRec=[], ordersPen=[], ordersOlder=[], ordersUnsubs=[], ordersOlderUnsub=null, ordersAllLoaded=false;
+let ordersReady={rec:false,pen:false};
 function ordersCutoff(){ return new Date(Date.now()-ORDERS_WINDOW_DAYS*86400000).toISOString(); }
 function stopOrderListeners(){
   ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
   if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
-  ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false;
+  ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null;
 }
 function ordersMerge(){
   const m={}; ordersOlder.concat(ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
   const orders=Object.values(m).filter(function(o){return !o.deleted;}).sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
   localStorage.setItem('delamotte_orders',JSON.stringify(orders));
-  renderOrders();updateOrdersBadge();renderDashboard();
+  // nouveau message sur une de mes commandes : alerte (jamais au chargement initial, ni pour mes propres messages)
+  if(ordersReady.rec&&ordersReady.pen){
+    const vis=getVisibleOrders(orders);
+    if(cmtSeen!==null) vis.forEach(function(o){ const lc=o.lastComment; if(lc&&lc.user!==currentUser&&lc.at>(cmtSeen[o.id]||'')) showToast('💬 '+lc.user+' ('+o.id+') : '+String(lc.text).slice(0,60)); });
+    cmtSeen={}; vis.forEach(function(o){ if(o.lastComment) cmtSeen[o.id]=o.lastComment.at; });
+  }
+  renderOrders();updateOrdersBadge();renderDashboard();updateCommentBadge();
   if(currentCat===FAV_CAT) filterProducts();   // « souvent commandés » suit les nouvelles commandes
 }
 function listenOrders(){
   stopOrderListeners();
   const cut=ordersCutoff();
-  const sub=function(q,assign,onErr){ return q.onSnapshot(function(snap){ assign(snap.docs.map(function(d){return d.data();})); ordersMerge(); },onErr||function(){}); };
+  const sub=function(q,assign,onErr,key){ return q.onSnapshot(function(snap){ assign(snap.docs.map(function(d){return d.data();})); if(key) ordersReady[key]=true; ordersMerge(); },onErr||function(){}); };
   if(ownDataOnly()){
     const base=db.collection('orders').where('user','==',currentUser);
     // récentes : nécessite un index composite (user + createdAt) ; tant qu'il n'existe pas, repli sur toutes les commandes de l'utilisateur
-    ordersUnsubs.push(sub(base.where('createdAt','>=',cut),function(a){ordersRec=a;},function(){ ordersUnsubs.push(sub(base,function(a){ordersRec=a;})); }));
-    ordersUnsubs.push(sub(base.where('status','==','pending'),function(a){ordersPen=a;}));
+    ordersUnsubs.push(sub(base.where('createdAt','>=',cut),function(a){ordersRec=a;},function(){ ordersUnsubs.push(sub(base,function(a){ordersRec=a;},null,'rec')); },'rec'));
+    ordersUnsubs.push(sub(base.where('status','==','pending'),function(a){ordersPen=a;},null,'pen'));
   }else{
-    ordersUnsubs.push(sub(db.collection('orders').where('createdAt','>=',cut).orderBy('createdAt','desc'),function(a){ordersRec=a;}));
-    ordersUnsubs.push(sub(db.collection('orders').where('status','==','pending'),function(a){ordersPen=a;}));
+    ordersUnsubs.push(sub(db.collection('orders').where('createdAt','>=',cut).orderBy('createdAt','desc'),function(a){ordersRec=a;},null,'rec'));
+    ordersUnsubs.push(sub(db.collection('orders').where('status','==','pending'),function(a){ordersPen=a;},null,'pen'));
   }
 }
 // charge l'historique complet (une seule fois par session) : statistiques, exports, anciennes commandes
@@ -6832,13 +6843,13 @@ function renderOrders(){
   const all=getOrders();
   const vis=getVisibleOrders(all);
   const pending=vis.filter(o=>o.status==='pending').length;
-  const done=vis.filter(o=>o.status==='done').length;
+  const cutW=ordersCutoff(), visW=vis.filter(o=>o.status==='pending'||String(o.createdAt||'')>=cutW), done=visW.filter(o=>o.status==='done').length;   // compteurs : 35 derniers jours + en attente (identiques PC / téléphone)
   updateOrdersBadge();
   renderDashboard();
   document.getElementById('statsBar').innerHTML=`
-    <div class="stat-card"><div class="stat-num">${vis.length}</div><div class="stat-label">Total</div></div>
+    <div class="stat-card"><div class="stat-num">${visW.length}</div><div class="stat-label">Total (35 j)</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitees</div></div>`;
+    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`;
   document.getElementById('filterBar').innerHTML=['all','pending','done'].map(f=>`
     <button class="filter-btn${orderFilter===f?' active':''}" onclick="setFilter('${f}')">
       ${f==='all'?'Toutes':f==='pending'?'En attente':'Traitees'}</button>`).join('');
@@ -6869,12 +6880,13 @@ function renderOrders(){
       <div class="order-info">${o.items.length} ref. - ${o.items.reduce((s,i)=>s+i.qty,0)} art.${o.comment?' - '+o.comment:''}</div>
       ${o.dateLivraison?`<div class="order-info" style="color:var(--green);font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
       ${resteHtml(o)}
+      ${cmtPreviewHtml(o)}
       ${orderValueHtml(o)}
       ${orderEditInfoHtml(o)}
       <div class="order-actions">
         <button class="btn-print" style="background:#27ae60" onclick="reorderOrder('${o.id}')" title="Remettre ces références dans mon panier">🔁 Recommander</button>
         <button class="btn-print" onclick="printOrder('${o.id}')">Bon de commande</button>
-        <button class="btn-print" style="background:var(--muted)" onclick="openCommentModal('${o.id}')">💬 Commentaires</button>
+        <button class="btn-print" style="background:var(--muted)" onclick="openCommentModal('${o.id}')">${cmtBtnLabel(o,true)}</button>
         ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-print" style="background:#8e44ad" onclick="openStockModal('${o.id}')">📦 Bon fournisseur</button>`:''}
         ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-done" onclick="markDone('${o.id}')">Traitee</button>`:''}
         ${currentRole==='admin'&&o.status==='done'?`<button class="btn-print" style="background:var(--orange)" onclick="reopenOrder('${o.id}')">↩️ Remettre en attente</button>`:''}
@@ -7353,22 +7365,29 @@ function printRetour(id){
 }
 
 // ===== RESTE À RECEVOIR : ce que le magasin n'a pas pu donner (ou pas en entier) à la remise de la commande =====
+function resteCanMark(o){ return !!o&&(currentRole==='admin'||o.user===currentUser||(currentRole==='conducteur'&&getVisibleOrders([o]).length>0)); }
 function resteHtml(o){
-  const r=(o&&o.reste)||[]; if(!r.length) return '';
-  const adm=currentRole==='admin';
-  const btn='padding:3px 9px;font-size:0.72rem;background:#27ae60';
-  return '<div style="background:#fff3cd;color:#856404;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:0.78rem;">'
-    +'<div style="font-weight:700;margin-bottom:3px">⏳ Reste à recevoir</div>'
-    +r.map(function(x,i){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span>• '+x.nom+' × <b>'+x.qty+'</b></span>'+(adm?'<button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\','+i+')">✅ Reçu</button>':'')+'</div>'; }).join('')
-    +(adm&&r.length>1?'<div style="text-align:right;margin-top:4px"><button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\',-1)">✅ Tout reçu</button></div>':'')
-    +'</div>';
+  if(!o) return '';
+  const r=o.reste||[], log=o.resteRecu||[], can=resteCanMark(o);
+  let html='';
+  if(r.length){
+    const btn='padding:3px 9px;font-size:0.72rem;background:#27ae60';
+    html+='<div style="background:#fff3cd;color:#856404;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:0.78rem;">'
+      +'<div style="font-weight:700;margin-bottom:3px">⏳ Reste à recevoir'+(can&&currentRole!=='admin'?' <span style="font-weight:400">— cliquez « Reçu » quand le matériel est arrivé</span>':'')+'</div>'
+      +r.map(function(x,i){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0"><span>• '+editEsc(x.nom)+' × <b>'+x.qty+'</b></span>'+(can?'<button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\','+i+')">✅ Reçu</button>':'')+'</div>'; }).join('')
+      +(can&&r.length>1?'<div style="text-align:right;margin-top:4px"><button class="btn-print" style="'+btn+'" onclick="resteRecu(\''+o.id+'\',-1)">✅ Tout reçu</button></div>':'')
+      +'</div>';
+  }
+  if(log.length) html+='<div style="font-size:0.72rem;color:var(--muted);margin:4px 0">✅ Reçu sur chantier : '+log.slice(-4).map(function(l){return editEsc(l.nom)+' × '+l.qty+' ('+editEsc(l.par||'')+', '+String(l.d||'').slice(8,10)+'/'+String(l.d||'').slice(5,7)+')';}).join(' · ')+(log.length>4?' …':'')+'</div>';
+  return html;
 }
 function resteRecu(id,idx){
-  if(currentRole!=='admin') return;
-  const o=getOrders().find(function(x){return x.id===id;}); if(!o||!(o.reste||[]).length) return;
-  const left=idx<0?[]:o.reste.filter(function(_,i){return i!==idx;});
-  db.collection('orders').doc(id).update({reste:left}).then(function(){ showToast(left.length?'✅ Article reçu':'✅ Tout est reçu'); }).catch(function(){ showToast('❌ Non enregistré'); });
+  const o=getOrders().find(function(x){return x.id===id;}); if(!o||!resteCanMark(o)||!(o.reste||[]).length) return;
+  const got=idx<0?o.reste.slice():[o.reste[idx]], left=idx<0?[]:o.reste.filter(function(_,i){return i!==idx;}), d=new Date().toISOString();
+  db.collection('orders').doc(id).update({reste:left,resteRecu:firebase.firestore.FieldValue.arrayUnion.apply(null,got.map(function(x){return {code:x.code,nom:x.nom,qty:x.qty,par:currentUser,d:d};}))})
+    .then(function(){ showToast(left.length?'✅ Article reçu':'✅ Tout est reçu'); }).catch(function(){ showToast('❌ Non enregistré'); });
 }
+
 function markDone(id){
   const order=getOrders().find(o=>o.id===id);
   if(!order) return;
@@ -7628,13 +7647,13 @@ function renderDashboard(){
   const today=new Date().toLocaleDateString('fr-FR');
   const todayOrders=all.filter(o=>o.date.startsWith(today));
   const pending=all.filter(o=>o.status==='pending').length;
-  const done=all.filter(o=>o.status==='done').length;
+  const cutW=ordersCutoff(), done=all.filter(o=>o.status==='done'&&String(o.createdAt||'')>=cutW).length;   // même nombre sur tous les appareils (35 derniers jours)
   const aG=stockAlertList('gros').length;
   const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">📦 Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées</div></div>`+al('gros',aG);
+    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`+al('gros',aG);
 }
 
 function clearDateFilter(){
@@ -7672,12 +7691,13 @@ function renderSuivi(){
           <div class="suivi-total">${o.items.length} réf. · ${o.items.reduce((s,i)=>s+i.qty,0)} art.${canSeeValues()?' · 💶 '+fmtEur(orderValue(o).total):''}${o.comment?' · '+o.comment:''}</div>
           ${o.dateLivraison?`<div style="color:var(--green);font-size:0.78rem;font-weight:600">📅 Livraison estimée : ${o.dateLivraison}</div>`:''}
           ${resteHtml(o)}
+          ${cmtPreviewHtml(o)}
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span class="order-status ${o.status==='done'?'status-done':'status-pending'}">${o.status==='done'?'Traitée':'En attente'}</span>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:#27ae60" onclick="reorderOrder('${o.id}')" title="Recommander : remettre ces références dans mon panier">🔁</button>
           <button class="btn-print" style="padding:5px 10px;font-size:0.75rem" onclick="printOrder('${o.id}')">🖨️</button>
-          <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:var(--muted)" onclick="openCommentModal('${o.id}')">💬</button>
+          <button class="btn-print" style="padding:5px 10px;font-size:0.75rem;background:var(--muted)" onclick="openCommentModal('${o.id}')">${cmtBtnLabel(o,false)}</button>
           ${currentRole==='admin'&&o.status==='pending'?`<button class="btn-done" style="padding:5px 10px;font-size:0.75rem" onclick="markDone('${o.id}')">✅</button>`:''}
         </div>
       </div>`).join('');
@@ -8445,12 +8465,25 @@ function exportExcelNow(){
 // ===== COMMENTAIRES =====
 let currentCommentOrderId=null;
 let commentListener=null;
+// ===== COMMENTAIRES : le dernier message et le nombre figurent sur la commande ; « nouveau » tant qu'on n'a pas ouvert le fil =====
+let cmtSeen=null;
+function cmtReadMap(){ try{return JSON.parse(localStorage.getItem('delamotte_cread_'+currentUser)||'{}');}catch(e){return {};} }
+function cmtUnread(o){ const lc=o&&o.lastComment; if(!lc||lc.user===currentUser) return false; const r=cmtReadMap()[o.id]; return !r||lc.at>r; }
+function cmtMarkRead(id){ const o=getOrders().find(function(x){return x.id===id;}), m=cmtReadMap(), t=new Date().toISOString(); m[id]=(o&&o.lastComment&&o.lastComment.at>t)?o.lastComment.at:t; try{localStorage.setItem('delamotte_cread_'+currentUser,JSON.stringify(m));}catch(e){} }
+function cmtBtnLabel(o,long){ const n=o.commentCount||0; return '💬'+(long?' Commentaires':'')+(n?' ('+n+')':'')+(cmtUnread(o)?' 🔴':''); }
+function cmtPreviewHtml(o){ const lc=o.lastComment; if(!lc) return ''; const nw=cmtUnread(o); return '<div class="cmt-prev'+(nw?' new':'')+'" onclick="openCommentModal(\''+o.id+'\')">💬 <b>'+editEsc(lc.user)+'</b> : '+editEsc(lc.text)+(nw?' <b>● nouveau</b>':'')+'</div>'; }
+function updateCommentBadge(){
+  const n=getVisibleOrders(getOrders()).filter(cmtUnread).length, t=document.getElementById('commentsNavBadge'), b=document.getElementById('bnavCommentsBadge');
+  if(t){ t.style.display=n?'inline-block':'none'; t.textContent='💬 '+n; }
+  if(b){ b.style.display=n?'flex':'none'; b.textContent=n; }
+}
+function cmtRefresh(){ updateCommentBadge(); renderOrders(); if(document.getElementById('tabSuivi').style.display!=='none') renderSuivi(); }
 function openCommentModal(orderId){
   currentCommentOrderId=orderId;
   document.getElementById('commentOrderId').textContent=orderId;
   document.getElementById('commentInput').value='';
   document.getElementById('commentModal').style.display='flex';
-  // Listen real-time
+  cmtMarkRead(orderId); cmtRefresh();
   if(commentListener) commentListener();
   commentListener=db.collection('orders').doc(orderId).collection('comments')
     .orderBy('createdAt','asc').onSnapshot(snap=>{
@@ -8461,33 +8494,33 @@ function openCommentModal(orderId){
         const isAdmin=c.user===currentUser;
         return `<div style="display:flex;flex-direction:column;align-items:${isAdmin?'flex-end':'flex-start'}">
           <div class="comment-bubble ${isAdmin?'comment-admin':'comment-other'}">
-            <div class="comment-meta">${c.user} — ${c.date}</div>
-            <div>${c.text}</div>
+            <div class="comment-meta">${editEsc(c.user)} — ${editEsc(c.date)}</div>
+            <div>${editEsc(c.text)}</div>
           </div>
         </div>`;
       }).join('');
       el.scrollTop=el.scrollHeight;
+      cmtMarkRead(orderId);
     });
 }
+
 function closeCommentModal(){
+  const oid=currentCommentOrderId;
   document.getElementById('commentModal').style.display='none';
   if(commentListener){commentListener();commentListener=null;}
   currentCommentOrderId=null;
+  if(oid){ cmtMarkRead(oid); cmtRefresh(); }
 }
+
 function sendComment(){
-  const text=document.getElementById('commentInput').value.trim();
-  if(!text||!currentCommentOrderId) return;
+  const text=document.getElementById('commentInput').value.trim(), oid=currentCommentOrderId;
+  if(!text||!oid) return;
   const comment={text,user:currentUser,date:new Date().toLocaleString('fr-FR'),createdAt:new Date().toISOString()};
-  db.collection('orders').doc(currentCommentOrderId).collection('comments').add(comment)
-    .then(()=>document.getElementById('commentInput').value='')
+  db.collection('orders').doc(oid).collection('comments').add(comment)
+    .then(()=>{ document.getElementById('commentInput').value=''; return db.collection('orders').doc(oid).update({commentCount:firebase.firestore.FieldValue.increment(1),lastComment:{user:currentUser,text:text.slice(0,140),at:comment.createdAt}}); })
     .catch(()=>showToast('Erreur envoi commentaire'));
 }
-// Allow Enter key to send comment
-document.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&document.getElementById('commentModal').style.display==='flex') sendComment();
-});
 
-// Cart animation
 function animateCartBtn(){
   const btn=document.querySelector('.cart-btn');
   btn.style.transform='scale(1.2)';
@@ -9014,6 +9047,84 @@ function artExportBil(){
   XLSX.utils.book_append_sheet(wb,ws,('Bilan '+R.label).substring(0,31));
   XLSX.writeFile(wb,'Bilan_stock_DELAMOTTE_'+R.label.replace(/\s+/g,'_')+'.xlsx'); showToast('Bilan du stock téléchargé ✅');
 }
+// ===== ARRÊTÉS D'INVENTAIRE : copie figée du stock (quantités, prix, valeur) à une date, non modifiable depuis l'appli =====
+let artArreteCache=null;
+function artInvWindow(d){ return d.getMonth()===8&&d.getDate()>=23&&d.getDate()<=30; }   // rappel du 23 au 30 septembre
+function artArreteLoad(){
+  return db.collection('arretes').get().then(function(s){ artArreteCache=s.docs.map(function(d){return d.data();}).sort(function(a,b){return String(b.date).localeCompare(String(a.date));}); return artArreteCache; })
+    .catch(function(){ artArreteCache=[]; return artArreteCache; });
+}
+function artArreteCreate(){
+  if(currentRole!=='admin') return;
+  const today=new Date().toLocaleDateString('fr-FR');
+  const label=prompt('Nom de cet arrêté d\'inventaire :','Inventaire du '+today); if(label===null) return;
+  if(!confirm('Figer le stock maintenant ?\nUne copie exacte (quantités, prix et valeur de chaque article) sera enregistrée et ne pourra plus être modifiée depuis l\'application.')) return;
+  const items={}, cats={}; let total=0, nb=0;
+  [...CATALOGUE,...customRefsCache].forEach(function(p){
+    if(p.cat===DLM_CAT&&!canSeeDlm()) return;
+    const q=stockOf(p.code), tr=stockTrkG[p.code]||stockTrkP[p.code];
+    if(!tr&&!q) return;   // article dont le stock n'a jamais été saisi : non repris
+    const pr=parseFloat((REFS_FOURN[p.code]||{}).prix)||0;
+    items[p.code]=[q,pr]; nb++; total+=q*pr; cats[p.cat]=Math.round(((cats[p.cat]||0)+q*pr)*100)/100;
+  });
+  const now=new Date(), id='A'+now.toISOString().replace(/[:.]/g,'-');
+  const doc={id:id,label:(label.trim()||('Inventaire du '+today)),date:now.toISOString(),dateFr:now.toLocaleString('fr-FR'),by:currentUser,nb:nb,total:Math.round(total*100)/100,cats:cats,items:items};
+  db.collection('arretes').doc(id).set(doc).then(function(){ showToast('🔒 Stock figé : '+doc.label); artArreteCache=null; artRenderArr(); }).catch(function(){ showToast('❌ Non enregistré'); });
+}
+function artRenderArr(){
+  const el=document.getElementById('artBody'); const adm=currentRole==='admin';
+  const dnow=new Date(), rem=artInvWindow(dnow)?30-dnow.getDate():null;
+  el.innerHTML=(rem!==null?'<div style="background:#fff3cd;color:#856404;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.85rem;font-weight:700">📅 Inventaire annuel du 30/09'+(rem>0?' dans '+rem+' jour'+(rem>1?'s':''):' : c\'est aujourd\'hui')+' — pensez à figer le stock.</div>':'')
+    +'<div class="art-card"><h4>🔒 Arrêté d\'inventaire</h4><p style="font-size:0.82rem;color:var(--muted);margin:0 0 10px">Fige une <b>copie exacte du stock</b> à l\'instant T : quantité, prix et valeur de chaque article. Elle ne change plus, même si le stock continue de bouger. Elle ne peut ni être modifiée ni supprimée depuis l\'appli.</p>'
+    +(adm?'<button class="btn-save-user" onclick="artArreteCreate()">🔒 Figer le stock maintenant</button>':'<div style="font-size:0.8rem;color:var(--muted)">Seul l\'admin peut figer le stock.</div>')+'</div><div id="artArrList"><p style="text-align:center;color:var(--muted);padding:20px">Chargement...</p></div><div id="artArrDetail"></div>';
+  (artArreteCache?Promise.resolve(artArreteCache):artArreteLoad()).then(function(list){
+    const box=document.getElementById('artArrList'); if(!box) return;
+    box.innerHTML=list.length?list.map(function(a){ return '<div class="art-card"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start"><div><div style="font-weight:800;color:var(--blue)">🔒 '+editEsc(a.label)+'</div><div style="font-size:0.78rem;color:var(--muted)">Figé le '+editEsc(a.dateFr||a.date)+' par '+editEsc(a.by||'')+'</div></div><div style="text-align:right"><div style="font-size:1.05rem;font-weight:800;color:#8e44ad">'+fmtEur(a.total)+'</div><div style="font-size:0.74rem;color:var(--muted)">'+a.nb+' article(s)</div></div></div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn-print" data-id="'+a.id+'" onclick="artArreteView(this.dataset.id)">👁 Voir</button><button class="btn-print" style="background:var(--green)" data-id="'+a.id+'" onclick="artArreteExport(this.dataset.id)">📥 Export Excel</button><button class="btn-print" style="background:#34495e" data-id="'+a.id+'" onclick="artArreteCompare(this.dataset.id)">↔️ Comparer avec aujourd\'hui</button></div></div>'; }).join(''):'<div class="art-card"><p style="color:var(--muted);font-size:0.85rem;margin:0;text-align:center">Aucun arrêté pour l\'instant.</p></div>';
+  });
+}
+function artArreteGet(id){ return (artArreteCache||[]).find(function(a){return a.id===id;}); }
+function artArreteRows(a){
+  return Object.keys(a.items).map(function(code){ const p=artItem(code), q=a.items[code][0], pr=a.items[code][1]; return {code:code,nom:p?getEffectiveName(code,p.nom):code,cat:p?p.cat:'—',q:q,pr:pr,val:Math.round(q*pr*100)/100}; }).sort(function(x,y){return x.code.localeCompare(y.code);});
+}
+function artArreteView(id){
+  const a=artArreteGet(id), el=document.getElementById('artArrDetail'); if(!a||!el) return;
+  const rows=artArreteRows(a), cats=Object.keys(a.cats||{}).sort();
+  el.innerHTML='<div class="art-card"><h4>👁 '+editEsc(a.label)+' — '+editEsc(a.dateFr||'')+'</h4><div style="font-size:0.8rem;margin-bottom:8px">Valeur totale <b>'+fmtEur(a.total)+'</b> · '+a.nb+' articles · par '+editEsc(a.by||'')+'</div>'
+    +'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th style="text-align:left">Catégorie</th><th>Valeur</th></tr></thead><tbody>'+cats.map(function(c){return '<tr><td class="wrap">'+editEsc(c)+'</td><td>'+fmtEur(a.cats[c])+'</td></tr>';}).join('')+'</tbody></table></div></div>'
+    +'<div class="art-card"><input type="text" placeholder="🔍 Code ou nom..." oninput="artArreteFilter(\''+id+'\',this.value)" style="width:100%;padding:10px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box;margin-bottom:8px"><div id="artArrTable"></div></div>';
+  artArreteFilter(id,'');
+  el.scrollIntoView({behavior:'smooth'});
+}
+function artArreteFilter(id,q){
+  const a=artArreteGet(id), box=document.getElementById('artArrTable'); if(!a||!box) return;
+  const nq=normTxt(q||''); const rows=artArreteRows(a).filter(function(r){return !nq||normTxt(r.code).indexOf(nq)!==-1||normTxt(r.nom).indexOf(nq)!==-1;});
+  box.innerHTML='<div style="font-size:0.78rem;color:var(--muted);margin-bottom:6px">'+rows.length+' article(s)'+(rows.length>300?' — les 300 premiers affichés (l\'export les contient tous)':'')+'</div><div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Code</th><th style="text-align:left">Désignation</th><th>Quantité</th><th>Prix U.</th><th>Valeur</th></tr></thead><tbody>'
+    +rows.slice(0,300).map(function(r){return '<tr><td>'+r.code+'</td><td class="wrap">'+editEsc(r.nom)+'</td><td><b>'+artQty(r.q)+'</b></td><td>'+fmtEur(r.pr)+'</td><td>'+fmtEur(r.val)+'</td></tr>';}).join('')+'</tbody></table></div>';
+}
+function artArreteExport(id){
+  const a=artArreteGet(id); if(!a) return;
+  const rows=artArreteRows(a), wb=XLSX.utils.book_new();
+  const data=[['ARRÊTÉ D\'INVENTAIRE',a.label],['Figé le',a.dateFr||a.date],['Établi par',a.by||''],['Valorisation','Prix unitaire enregistré à la date de l\'arrêté'],['Articles',a.nb,'Valeur totale',a.total],[],['Code','Désignation','Catégorie','Quantité','Prix U.','Valeur']];
+  rows.forEach(function(r){ data.push([r.code,r.nom,r.cat,r.q,r.pr||'',r.val]); });
+  data.push([],['','','TOTAL',rows.reduce(function(s,r){return s+r.q;},0),'',a.total]);
+  const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=[{wch:14},{wch:55},{wch:22},{wch:11},{wch:10},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Inventaire');
+  const cats=Object.keys(a.cats||{}).sort(), d2=[['Catégorie','Valeur']]; cats.forEach(function(c){d2.push([c,a.cats[c]]);}); d2.push(['TOTAL',a.total]);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(d2),'Par catégorie');
+  XLSX.writeFile(wb,'Arrete_inventaire_'+String(a.date).slice(0,10)+'.xlsx'); showToast('Arrêté exporté ✅');
+}
+// écart entre l'arrêté et le stock d'aujourd'hui
+function artArreteCompare(id){
+  const a=artArreteGet(id), el=document.getElementById('artArrDetail'); if(!a||!el) return;
+  const codes=new Set(Object.keys(a.items)); [...CATALOGUE,...customRefsCache].forEach(function(p){ if((stockTrkG[p.code]||stockTrkP[p.code]||stockOf(p.code))&&(p.cat!==DLM_CAT||canSeeDlm())) codes.add(p.code); });
+  const rows=[]; let vThen=0, vNow=0;
+  codes.forEach(function(code){ const p=artItem(code), then=a.items[code]?a.items[code][0]:0, pr=a.items[code]?a.items[code][1]:(parseFloat((REFS_FOURN[code]||{}).prix)||0), now=stockOf(code), prn=parseFloat((REFS_FOURN[code]||{}).prix)||0; vThen+=then*pr; vNow+=now*prn; if(then!==now) rows.push({code:code,nom:p?getEffectiveName(code,p.nom):code,then:then,now:now,d:now-then}); });
+  rows.sort(function(x,y){return Math.abs(y.d)-Math.abs(x.d);});
+  el.innerHTML='<div class="art-card"><h4>↔️ '+editEsc(a.label)+' → aujourd\'hui</h4><div style="font-size:0.82rem;margin-bottom:8px">Valeur à l\'arrêté <b>'+fmtEur(vThen)+'</b> · valeur actuelle <b>'+fmtEur(vNow)+'</b> · <b>'+rows.length+'</b> article(s) dont la quantité a changé depuis</div>'
+    +(rows.length?'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Code</th><th style="text-align:left">Désignation</th><th>À l\'arrêté</th><th>Aujourd\'hui</th><th>Écart</th></tr></thead><tbody>'+rows.slice(0,300).map(function(r){return '<tr><td>'+r.code+'</td><td class="wrap">'+editEsc(r.nom)+'</td><td>'+artQty(r.then)+'</td><td>'+artQty(r.now)+'</td><td class="'+(r.d>0?'art-down':'art-up')+'"><b>'+(r.d>0?'+':'−')+artQty(Math.abs(r.d))+'</b></td></tr>';}).join('')+'</tbody></table></div>':'<p style="color:var(--muted);font-size:0.85rem;margin:0">Aucun écart : le stock est identique à l\'arrêté.</p>')+'</div>';
+  el.scrollIntoView({behavior:'smooth'});
+}
 function artOpen(code){
   if(currentRole!=='admin'&&currentRole!=='comptable') return;
   if(code){ art.code=code; art.mode='fic'; art.fq=''; }
@@ -9024,15 +9135,15 @@ function artOpen(code){
 // le bilan lit seulement le journal des mouvements ; consommation et fiche lisent aussi l'historique des commandes
 function artGo(){
   document.getElementById('artBody').innerHTML='<p style="text-align:center;color:var(--muted);padding:30px">Chargement...</p>';
-  (art.mode==='bil'?Promise.resolve():ensureAllOrders()).then(artRender);
+  (art.mode==='rap'||art.mode==='fic'?ensureAllOrders():Promise.resolve()).then(artRender);
 }
 
 function artClose(){ document.getElementById('artPanel').style.display='none'; }
 function artSetMode(m){ art.mode=m; artGo(); }
 
 function artRender(){
-  ['Bil','Rap','Fic'].forEach(function(k){ document.getElementById('artTab'+k).className='art-tabbtn'+(art.mode===k.toLowerCase()?' on':''); });
-  if(art.mode==='fic') artRenderFiche(); else if(art.mode==='rap') artRenderRap(); else artRenderBil();
+  ['Bil','Rap','Fic','Arr'].forEach(function(k){ document.getElementById('artTab'+k).className='art-tabbtn'+(art.mode===k.toLowerCase()?' on':''); });
+  if(art.mode==='fic') artRenderFiche(); else if(art.mode==='rap') artRenderRap(); else if(art.mode==='arr') artRenderArr(); else artRenderBil();
 }
 
 function artRenderRap(){
