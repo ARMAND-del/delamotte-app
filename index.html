@@ -653,10 +653,11 @@ const db = firebase.firestore();
 <div id="artPanel" style="display:none;position:fixed;inset:0;background:var(--gray);z-index:310;overflow:auto;-webkit-overflow-scrolling:touch;">
   <div style="max-width:1100px;margin:0 auto;padding:12px;box-sizing:border-box;">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-      <h3 style="color:var(--blue);font-size:1.05rem;margin:0;">📈 Suivi des articles</h3>
+      <h3 style="color:var(--blue);font-size:1.05rem;margin:0;">📦 Gestion du stock</h3>
       <button onclick="artClose()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <button id="artTabBil" class="art-tabbtn" onclick="artSetMode('bil')">📦 Bilan du stock</button>
       <button id="artTabRap" class="art-tabbtn" onclick="artSetMode('rap')">📊 Consommation</button>
       <button id="artTabFic" class="art-tabbtn" onclick="artSetMode('fic')">🔎 Fiche article</button>
     </div>
@@ -8634,7 +8635,7 @@ function invRowHtml(p){
     +'<td style="text-align:right;font-size:0.82rem">'+prix+'</td>'
     +'<td style="text-align:center">'+badge+'</td>'
     +'<td style="text-align:center;white-space:nowrap">'
-    +'<button onclick="artOpen(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Suivi de cet article : consommation, prix, provenance">📈</button>'
+    +'<button onclick="artOpen(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Fiche de cet article : consommation, prix, provenance, mouvements">📈</button>'
     +'<button onclick="openMvtModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Historique de cet article">📜</button>'
     +'<button onclick="openPrixModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px" title="Modifier prix/fournisseur">💰</button>'
     +(isCustom?'<button onclick="openCustomRefModal(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">✏️</button><button onclick="deleteCustomRef(this.dataset.code)" data-code="'+p.code+'" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:2px">🗑️</button>':'')
@@ -8671,7 +8672,7 @@ function renderInventaire(){
       </div>
       <button onclick="exportStockExcel()" style="padding:8px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📥 Export stock</button>
       <button onclick="openMvtModal()" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📜 Journal du stock</button>
-      <button onclick="artOpen()" style="padding:8px 14px;background:#16a085;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📈 Suivi des articles</button>
+      <button onclick="artOpen()" style="padding:8px 14px;background:#16a085;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📦 Gestion du stock</button>
       ${currentRole==='admin'?`
       <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
         🔄 Synchroniser depuis Excel
@@ -8803,7 +8804,9 @@ function deleteCustomRef(code){
 
 // ===== SUIVI DES ARTICLES : consommation par mois / par an, évolution des prix, provenance, mouvements =====
 const MOIS_C=['Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'];
-let art={mode:'rap',year:null,cat:'Toutes',q:'',sort:'total',code:null,fq:'',dur:12};
+let art={mode:'bil',year:null,cat:'Toutes',q:'',sort:'total',code:null,fq:'',dur:12,by:null,bm:null,bq:'',bcat:'Toutes',bsort:'sor'};
+let artBilCache=null;
+const MOIS_L=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 let artPrixDocs=null, artHistDocs=null;
 
 // --- mémoire des prix : chaque changement de prix / fournisseur est enregistré (avec l'ancien prix), un document par mois ---
@@ -8820,18 +8823,33 @@ function artMonthKey(o){ return String(o.processedAt||o.createdAt||'').slice(0,7
 // consommation = quantités des commandes traitées, par mois de traitement
 function artConso(){
   const by={}, years={};
+  const slot=function(code){ return by[code]||(by[code]={months:{},rm:{},g:0,p:0,tot:0,rtot:0,lines:[],rlines:[]}); };
   artOrders().forEach(function(o){
     const mk=artMonthKey(o); if(!/^\d{4}-\d{2}$/.test(mk)) return;
     years[mk.slice(0,4)]=1;
     const svc=orderSvc(o);
     (o.items||[]).forEach(function(it){
-      const b=by[it.code]||(by[it.code]={months:{},g:0,p:0,tot:0,lines:[]}), q=it.qty||0;
+      const b=slot(it.code), q=it.qty||0;
       b.months[mk]=(b.months[mk]||0)+q; b.tot+=q; if(svc==='particulier') b.p+=q; else b.g+=q;
       b.lines.push({id:o.id,date:o.processedAt||o.createdAt||'',chantier:o.chantier,svc:svc,qty:q});
     });
   });
+  // retours de chantier traités : quantités remises en stock (même unité que les commandes : mètres pour une barre)
+  (retoursCache||[]).filter(function(r){return r.status==='received'&&!r.deleted;}).forEach(function(r){
+    const mk=String(r.receivedAt||r.createdAt||'').slice(0,7); if(!/^\d{4}-\d{2}$/.test(mk)) return;
+    years[mk.slice(0,4)]=1;
+    (r.receivedItems||[]).forEach(function(li){
+      const b=slot(li.code), q=li.stock||0; if(!q) return;
+      b.rm[mk]=(b.rm[mk]||0)+q; b.rtot+=q;
+      b.rlines.push({id:r.id,date:r.receivedAt||r.createdAt||'',chantier:r.chantier,svc:retourSvc(r),qty:q});
+    });
+  });
   return {by:by,years:Object.keys(years).sort()};
 }
+// quantité consommée d'un article pour un mois (retours déduits si la case est cochée)
+function artMonthQty(b,mk){ return b.months[mk]||0; }   // sorties du mois (les retours sont comptés à part)
+function artYearTotals(b,y){ let s=0,r=0; for(let i=1;i<=12;i++){ const k=y+'-'+String(i).padStart(2,'0'); s+=b.months[k]||0; r+=b.rm[k]||0; } return {s:s,r:r,n:s-r}; }
+
 function artMonthsElapsed(year){ const n=new Date(); return String(n.getFullYear())===String(year)?n.getMonth()+1:12; }
 function artQty(n){ return (Math.round(n*100)/100).toLocaleString('fr-FR'); }
 function artRows(C,year){
@@ -8839,35 +8857,135 @@ function artRows(C,year){
   [...CATALOGUE,...customRefsCache].forEach(function(p){
     if(p.cat===DLM_CAT&&!canSeeDlm()) return;
     const b=C.by[p.code]; if(!b) return;
-    const m=[]; let tot=0;
-    for(let i=1;i<=12;i++){ const q=b.months[year+'-'+String(i).padStart(2,'0')]||0; m.push(q); tot+=q; }
-    if(!tot) return;
-    const avg=tot/nm, stk=stockOf(p.code), pr=parseFloat((REFS_FOURN[p.code]||{}).prix)||0;
-    rows.push({code:p.code,nom:getEffectiveName(p.code,p.nom),cat:p.cat,m:m,tot:tot,avg:avg,stk:stk,couv:avg>0?stk/avg:null,prix:pr,val:tot*pr});
+    const m=[]; let tot=0, ret=0;
+    for(let i=1;i<=12;i++){ const k=year+'-'+String(i).padStart(2,'0'), q=b.months[k]||0; m.push(q); tot+=q; ret+=b.rm[k]||0; }
+    if(!tot&&!ret) return;
+    const net=tot-ret, avg=net/nm, stk=stockOf(p.code), pr=parseFloat((REFS_FOURN[p.code]||{}).prix)||0;
+    rows.push({code:p.code,nom:getEffectiveName(p.code,p.nom),cat:p.cat,m:m,tot:tot,ret:ret,net:net,avg:avg,stk:stk,couv:avg>0?stk/avg:null,prix:pr,val:net*pr});
   });
   return rows;
 }
+
 function artFiltered(C){
   const q=normTxt(art.q);
   let rows=artRows(C,art.year).filter(function(r){ return (art.cat==='Toutes'||r.cat===art.cat)&&(!q||normTxt(r.code).indexOf(q)!==-1||normTxt(r.nom).indexOf(q)!==-1); });
-  const cmp={total:function(a,b){return b.tot-a.tot;},nom:function(a,b){return a.nom.localeCompare(b.nom,'fr');},code:function(a,b){return a.code.localeCompare(b.code);},couv:function(a,b){return (a.couv===null?1e9:a.couv)-(b.couv===null?1e9:b.couv);}}[art.sort]||function(a,b){return b.tot-a.tot;};
+  const cmp={total:function(a,b){return b.net-a.net;},nom:function(a,b){return a.nom.localeCompare(b.nom,'fr');},code:function(a,b){return a.code.localeCompare(b.code);},couv:function(a,b){return (a.couv===null?1e9:a.couv)-(b.couv===null?1e9:b.couv);}}[art.sort]||function(a,b){return b.net-a.net;};
   return rows.sort(cmp);
 }
+
+// ----- bilan du stock sur une période : début + réceptions + retours − sorties ± corrections = fin -----
+function artBilRange(){
+  const y=parseInt(art.by), m=parseInt(art.bm);
+  const s=m>0?new Date(y,m-1,1):new Date(y,0,1), e=m>0?new Date(y,m,1):new Date(y+1,0,1);
+  return {s:s.toISOString(),e:e.toISOString(),label:(m>0?MOIS_L[m-1]+' ':'année ')+y};
+}
+function artRenderBil(){
+  const now=new Date(); if(!art.by) art.by=String(now.getFullYear()); if(art.bm===null) art.bm=now.getMonth()+1;
+  const cy=now.getFullYear(), years=[cy,cy-1,cy-2];
+  const cats=['Toutes'].concat(Array.from(new Set(CATALOGUE.map(function(p){return p.cat;}).filter(function(c){return c!==DLM_CAT||canSeeDlm();}))));
+  const sel='padding:9px;border:2px solid var(--border);border-radius:8px;font-size:0.85rem;background:var(--white);color:var(--text);';
+  document.getElementById('artBody').innerHTML='<div class="art-card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<select onchange="art.bm=parseInt(this.value);artBilLoad()" style="'+sel+'"><option value="0"'+(art.bm===0?' selected':'')+'>Toute l\'année</option>'+MOIS_L.map(function(m,i){return '<option value="'+(i+1)+'"'+(art.bm===i+1?' selected':'')+'>'+m.charAt(0).toUpperCase()+m.slice(1)+'</option>';}).join('')+'</select>'
+    +'<select onchange="art.by=this.value;artBilLoad()" style="'+sel+'">'+years.map(function(y){return '<option value="'+y+'"'+(String(y)===art.by?' selected':'')+'>'+y+'</option>';}).join('')+'</select>'
+    +'<select onchange="art.bcat=this.value;artBilBody()" style="'+sel+'">'+cats.map(function(c){return '<option value="'+editEsc(c)+'"'+(c===art.bcat?' selected':'')+'>'+editEsc(c)+'</option>';}).join('')+'</select>'
+    +'<input type="text" placeholder="🔍 Code ou nom..." value="'+editEsc(art.bq)+'" oninput="art.bq=this.value;artBilBody()" style="'+sel+'flex:1;min-width:130px;">'
+    +'<select onchange="art.bsort=this.value;artBilBody()" style="'+sel+'"><option value="sor"'+(art.bsort==='sor'?' selected':'')+'>Tri : plus de sorties</option><option value="ent"'+(art.bsort==='ent'?' selected':'')+'>Tri : plus de réceptions</option><option value="nom"'+(art.bsort==='nom'?' selected':'')+'>Tri : nom</option><option value="code"'+(art.bsort==='code'?' selected':'')+'>Tri : code</option></select>'
+    +'<button class="btn-print" style="background:var(--green)" onclick="artExportBil()">📥 Export Excel</button></div></div><div id="artBilBody"></div>';
+  artBilLoad();
+}
+// lit le journal des mouvements depuis le début de la période (une seule requête)
+function artBilLoad(){
+  const R=artBilRange(), el=document.getElementById('artBilBody'); if(!el) return;
+  el.innerHTML='<p style="text-align:center;color:var(--muted);padding:24px">Chargement du journal des mouvements...</p>';
+  db.collection('stock_mouvements').where('date','>=',R.s).orderBy('date','desc').limit(6000).get().then(function(snap){
+    artBilCache={start:R.s,rows:snap.docs.map(function(d){return d.data();}),full:snap.docs.length<6000};
+    artBilBody();
+  }).catch(function(){ el.innerHTML='<p style="color:var(--red);text-align:center;padding:24px">Erreur de chargement du journal</p>'; });
+}
+function artBilCompute(rows,startISO,endISO){
+  const ev={}, map={reception:'ent',retour:'ret',annulretour:'ret',commande:'sor',annulation:'sor',inventaire:'cor'};
+  const add=function(code,k,delta,date){
+    const e=ev[code]||(ev[code]={ent:0,ret:0,sor:0,cor:0,after:0});
+    if(date>=endISO){ e.after+=delta; return; }
+    if(date>=startISO) e[k]+=delta;
+  };
+  rows.forEach(function(m){
+    if(m.summaryDoc){ if(m.type==='synchro'||m.type==='reset') (m.details||[]).forEach(function(d){ add(d.code,'cor',(d.b||0)-(d.a||0),m.date); }); return; }
+    const k=map[m.type]; if(!k||!m.code) return; add(m.code,k,m.delta||0,m.date);
+  });
+  const out=[];
+  Object.keys(ev).forEach(function(code){
+    const e=ev[code], p=artItem(code); if(!p||(p.cat===DLM_CAT&&!canSeeDlm())) return;
+    if(!(e.ent||e.ret||e.sor||e.cor)) return;
+    const fin=stockOf(code)-e.after, deb=fin-(e.ent+e.ret+e.sor+e.cor), pr=parseFloat((REFS_FOURN[code]||{}).prix)||0;
+    out.push({code:code,nom:getEffectiveName(code,p.nom),cat:p.cat,deb:deb,ent:e.ent,ret:e.ret,sor:-e.sor,cor:e.cor,fin:fin,prix:pr});
+  });
+  return out;
+}
+function artBilFiltered(){
+  const R=artBilRange(); let rows=artBilCompute(artBilCache.rows,R.s,R.e);
+  const q=normTxt(art.bq);
+  rows=rows.filter(function(r){ return (art.bcat==='Toutes'||r.cat===art.bcat)&&(!q||normTxt(r.code).indexOf(q)!==-1||normTxt(r.nom).indexOf(q)!==-1); });
+  const cmp={sor:function(a,b){return b.sor-a.sor;},ent:function(a,b){return b.ent-a.ent;},nom:function(a,b){return a.nom.localeCompare(b.nom,'fr');},code:function(a,b){return a.code.localeCompare(b.code);}}[art.bsort]||function(a,b){return b.sor-a.sor;};
+  return rows.sort(cmp);
+}
+function artBilBody(){
+  const el=document.getElementById('artBilBody'); if(!el||!artBilCache) return;
+  const R=artBilRange(), rows=artBilFiltered();
+  const sum=function(k){ return rows.reduce(function(s,r){return s+r[k];},0); };
+  const val=function(k){ return rows.reduce(function(s,r){return s+r[k]*r.prix;},0); };
+  let stockVal=0, bas=0, rupt=0;
+  [...CATALOGUE,...customRefsCache].forEach(function(p){
+    if(p.cat===DLM_CAT&&!canSeeDlm()) return;
+    const q=stockOf(p.code), tr=stockTrkG[p.code]||stockTrkP[p.code];
+    stockVal+=q*(parseFloat((REFS_FOURN[p.code]||{}).prix)||0);
+    if(tr&&q===0) rupt++; else if(tr&&q>0&&q<=invSeuilAlerte) bas++;
+  });
+  const card=function(ico,lab,qty,v,cls){ return '<div class="stat-card"><div class="stat-num '+cls+'" style="font-size:1.35rem">'+qty+'</div><div class="stat-label">'+ico+' '+lab+(v?'<br><span style="font-size:0.72rem">'+v+'</span>':'')+'</div></div>'; };
+  const sg=function(n){ return (n>0?'+':n<0?'−':'')+artQty(Math.abs(n)); };
+  const shown=rows.slice(0,400);
+  el.innerHTML='<div class="inv-stats" style="margin-bottom:10px">'
+    +'<div class="stat-card"><div class="stat-num" style="font-size:1.3rem;color:#8e44ad">'+fmtEur(stockVal)+'</div><div class="stat-label">💶 Valeur du stock aujourd\'hui</div></div>'
+    +'<div class="stat-card" onclick="openStockAlerts()" style="cursor:pointer"><div class="stat-num" style="font-size:1.35rem;color:var(--orange)">'+bas+'</div><div class="stat-label">⚠️ Stock bas</div></div>'
+    +'<div class="stat-card"><div class="stat-num" style="font-size:1.35rem;color:var(--red)">'+rupt+'</div><div class="stat-label">❌ Ruptures</div></div></div>'
+    +'<div class="art-card"><h4>Mouvements — '+R.label+'</h4>'
+    +'<div class="inv-stats">'+card('🚚','Réceptions',sum('ent')?'+'+artQty(sum('ent')):'0',fmtEur(val('ent')),'art-down')+card('↩️','Retours de chantier',sum('ret')?'+'+artQty(sum('ret')):'0',fmtEur(val('ret')),'art-down')+card('📦','Sorties (commandes)',sum('sor')?'−'+artQty(sum('sor')):'0',fmtEur(val('sor')),'art-up')+card('✏️','Corrections','' +sg(sum('cor')),'inventaire et synchro','')+'</div>'
+    +'<div style="font-size:0.78rem;color:var(--muted);margin-top:8px">Stock fin = stock début + réceptions + retours − sorties ± corrections. Valeurs au prix actuel.'+(artBilCache.full?'':' ⚠️ Période très longue : seuls les 6 000 mouvements les plus récents sont lus.')+'</div></div>'
+    +'<div class="art-card"><div style="font-size:0.82rem;margin-bottom:8px"><b>'+rows.length+'</b> article(s) avec mouvement'+(rows.length>400?' · les 400 premiers affichés (l\'export les contient tous)':'')+'</div>'
+    +(rows.length?'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Code</th><th style="text-align:left">Désignation</th><th>Début</th><th>Réceptions</th><th>Retours</th><th>Sorties</th><th>Corrections</th><th>Fin</th></tr></thead><tbody>'
+      +shown.map(function(r){ return '<tr onclick="artOpen(this.dataset.code)" data-code="'+r.code+'" style="cursor:pointer"><td>'+r.code+'</td><td class="wrap">'+editEsc(r.nom)+'</td><td>'+artQty(r.deb)+'</td><td'+(r.ent?' class="art-down"':' style="color:var(--muted)"')+'>'+(r.ent?'+'+artQty(r.ent):'·')+'</td><td'+(r.ret?' class="art-down"':' style="color:var(--muted)"')+'>'+(r.ret?'+'+artQty(r.ret):'·')+'</td><td'+(r.sor?' class="art-up"':' style="color:var(--muted)"')+'>'+(r.sor?'−'+artQty(r.sor):'·')+'</td><td'+(r.cor?'':' style="color:var(--muted)"')+'>'+(r.cor?sg(r.cor):'·')+'</td><td><b>'+artQty(r.fin)+'</b></td></tr>'; }).join('')+'</tbody></table></div>'
+      :'<p style="color:var(--muted);text-align:center;padding:20px">Aucun mouvement enregistré sur cette période.<br><span style="font-size:0.78rem">Le journal enregistre les commandes traitées, réceptions, retours et corrections depuis sa mise en service.</span></p>')+'</div>';
+}
+function artExportBil(){
+  if(!artBilCache) return;
+  const R=artBilRange(), rows=artBilFiltered(), wb=XLSX.utils.book_new();
+  const data=[['Code','Désignation','Catégorie','Stock début','Réceptions','Retours de chantier','Sorties (commandes)','Corrections','Stock fin','Prix U.','Valeur fin']];
+  rows.forEach(function(r){ data.push([r.code,r.nom,r.cat,r.deb,r.ent,r.ret,r.sor,r.cor,r.fin,r.prix||'',Math.round(r.fin*r.prix*100)/100]); });
+  const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=[{wch:12},{wch:50},{wch:20},{wch:12},{wch:12},{wch:18},{wch:18},{wch:12},{wch:11},{wch:9},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,('Bilan '+R.label).substring(0,31));
+  XLSX.writeFile(wb,'Bilan_stock_DELAMOTTE_'+R.label.replace(/\s+/g,'_')+'.xlsx'); showToast('Bilan du stock téléchargé ✅');
+}
 function artOpen(code){
-  if(!canSeeValues()) return;
+  if(currentRole!=='admin'&&currentRole!=='comptable') return;
   if(code){ art.code=code; art.mode='fic'; art.fq=''; }
   document.getElementById('artPanel').style.display='block';
-  document.getElementById('artBody').innerHTML='<p style="text-align:center;color:var(--muted);padding:30px">Chargement de l\'historique des commandes...</p>';
-  ensureAllOrders().then(artRender);
+  artBilCache=null;
+  artGo();
 }
+// le bilan lit seulement le journal des mouvements ; consommation et fiche lisent aussi l'historique des commandes
+function artGo(){
+  document.getElementById('artBody').innerHTML='<p style="text-align:center;color:var(--muted);padding:30px">Chargement...</p>';
+  (art.mode==='bil'?Promise.resolve():ensureAllOrders()).then(artRender);
+}
+
 function artClose(){ document.getElementById('artPanel').style.display='none'; }
-function artSetMode(m){ art.mode=m; artRender(); }
+function artSetMode(m){ art.mode=m; artGo(); }
+
 function artRender(){
-  document.getElementById('artTabRap').className='art-tabbtn'+(art.mode==='rap'?' on':'');
-  document.getElementById('artTabFic').className='art-tabbtn'+(art.mode==='fic'?' on':'');
-  if(art.mode==='fic') artRenderFiche(); else artRenderRap();
+  ['Bil','Rap','Fic'].forEach(function(k){ document.getElementById('artTab'+k).className='art-tabbtn'+(art.mode===k.toLowerCase()?' on':''); });
+  if(art.mode==='fic') artRenderFiche(); else if(art.mode==='rap') artRenderRap(); else artRenderBil();
 }
-// ----- rapport : consommation de chaque article, mois par mois -----
+
 function artRenderRap(){
   const C=artConso(), cy=String(new Date().getFullYear());
   const years=C.years.slice(); if(years.indexOf(cy)===-1) years.push(cy);
@@ -8880,36 +8998,42 @@ function artRenderRap(){
     +'<input type="text" placeholder="🔍 Code ou nom..." value="'+editEsc(art.q)+'" oninput="art.q=this.value;artRapBody()" style="'+sel+'flex:1;min-width:130px;">'
     +'<select onchange="art.sort=this.value;artRapBody()" style="'+sel+'"><option value="total"'+(art.sort==='total'?' selected':'')+'>Tri : plus consommés</option><option value="couv"'+(art.sort==='couv'?' selected':'')+'>Tri : couverture la plus courte</option><option value="nom"'+(art.sort==='nom'?' selected':'')+'>Tri : nom</option><option value="code"'+(art.sort==='code'?' selected':'')+'>Tri : code</option></select>'
     +'<button class="btn-print" style="background:var(--green)" onclick="artExportRap()">📥 Export Excel</button></div>'
-    +'<div style="font-size:0.74rem;color:var(--muted);margin-top:8px">Quantités des commandes traitées, par mois de traitement (en mètres pour les barres). Cliquez sur un article pour voir sa fiche.</div></div><div id="artRapBody"></div>';
+    +'<div style="font-size:0.74rem;color:var(--muted);margin-top:8px"><b>Sorties</b> = quantités des commandes traitées, mois par mois (en mètres pour les barres). <b>Retours</b> = matériel rendu par les chantiers (bons de retour traités). <b>Net</b> = sorties − retours. Moyenne et couverture sont calculées sur le net. Cliquez sur un article pour sa fiche.</div></div><div id="artRapBody"></div>';
   artRapBody();
 }
+
 function artRapBody(){
   const C=artConso(), rows=artFiltered(C), el=document.getElementById('artRapBody'); if(!el) return;
-  const tot=rows.reduce(function(s,r){return s+r.tot;},0), val=rows.reduce(function(s,r){return s+r.val;},0);
+  const sum=function(k){ return rows.reduce(function(s,r){return s+r[k];},0); };
   const shown=rows.slice(0,400);
-  el.innerHTML='<div class="art-card"><div style="font-size:0.82rem;margin-bottom:8px"><b>'+rows.length+'</b> article(s) consommé(s) en '+art.year+' · <b>'+artQty(tot)+'</b> unités'+(canSeeValues()?' · valeur au prix actuel <b>'+fmtEur(val)+'</b>':'')+(rows.length>400?' · les 400 premiers affichés (l\'export les contient tous)':'')+'</div>'
-    +(rows.length?'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Code</th><th style="text-align:left">Désignation</th>'+MOIS_C.map(function(m){return '<th>'+m+'</th>';}).join('')+'<th>Total</th><th>Moy./mois</th><th>Stock</th><th>Couverture</th></tr></thead><tbody>'
+  el.innerHTML='<div class="art-card"><div style="font-size:0.82rem;margin-bottom:8px"><b>'+rows.length+'</b> article(s) en '+art.year+' · sorties <b>'+artQty(sum('tot'))+'</b> · retours <b class="art-down">−'+artQty(sum('ret'))+'</b> · <b>net '+artQty(sum('net'))+'</b>'+(canSeeValues()?' · valeur nette au prix actuel <b>'+fmtEur(sum('val'))+'</b>':'')+(rows.length>400?' · les 400 premiers affichés (l\'export les contient tous)':'')+'</div>'
+    +(rows.length?'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Code</th><th style="text-align:left">Désignation</th>'+MOIS_C.map(function(m){return '<th>'+m+'</th>';}).join('')+'<th>Sorties</th><th>Retours</th><th>Net</th><th>Moy./mois</th><th>Stock</th><th>Couverture</th></tr></thead><tbody>'
       +shown.map(function(r){
         const cov=r.couv===null?'—':(r.stk===0?'<span class="art-up">0</span>':(Math.round(r.couv*10)/10).toLocaleString('fr-FR')+' mois');
-        return '<tr onclick="artOpen(this.dataset.code)" data-code="'+r.code+'" style="cursor:pointer"><td>'+r.code+'</td><td class="wrap">'+editEsc(r.nom)+'</td>'+r.m.map(function(q){return '<td'+(q?'':' style="color:var(--muted)"')+'>'+(q?artQty(q):'·')+'</td>';}).join('')+'<td><b>'+artQty(r.tot)+'</b></td><td>'+artQty(r.avg)+'</td><td>'+artQty(r.stk)+'</td><td>'+cov+'</td></tr>';
+        return '<tr onclick="artOpen(this.dataset.code)" data-code="'+r.code+'" style="cursor:pointer"><td>'+r.code+'</td><td class="wrap">'+editEsc(r.nom)+'</td>'+r.m.map(function(q){return '<td'+(q?'':' style="color:var(--muted)"')+'>'+(q?artQty(q):'·')+'</td>';}).join('')+'<td>'+artQty(r.tot)+'</td><td'+(r.ret?' class="art-down"':' style="color:var(--muted)"')+'>'+(r.ret?'−'+artQty(r.ret):'·')+'</td><td><b>'+artQty(r.net)+'</b></td><td>'+artQty(r.avg)+'</td><td>'+artQty(r.stk)+'</td><td>'+cov+'</td></tr>';
       }).join('')+'</tbody></table></div>':'<p style="color:var(--muted);text-align:center;padding:20px">Aucune consommation pour ces critères.</p>')+'</div>';
 }
+
 function artExportRap(){
   const C=artConso(), rows=artFiltered(C);
-  const wb=XLSX.utils.book_new(), nm=artMonthsElapsed(art.year);
-  const data=[['Code','Désignation','Catégorie'].concat(MOIS_C,['Total','Moyenne/mois','Stock actuel','Couverture (mois)','Prix U.','Valeur consommée'])];
-  rows.forEach(function(r){ data.push([r.code,r.nom,r.cat].concat(r.m,[r.tot,Math.round(r.avg*100)/100,r.stk,r.couv===null?'':Math.round(r.couv*10)/10,r.prix||'',Math.round(r.val*100)/100])); });
-  const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=[{wch:12},{wch:50},{wch:20}].concat(MOIS_C.map(function(){return {wch:7};}),[{wch:9},{wch:12},{wch:11},{wch:16},{wch:9},{wch:16}]);
+  const wb=XLSX.utils.book_new();
+  const data=[['Code','Désignation','Catégorie'].concat(MOIS_C.map(function(m){return m+' (sorties)';}),['Total sorties','Retours','Net','Moyenne/mois (net)','Stock actuel','Couverture (mois)','Prix U.','Valeur nette'])];
+  rows.forEach(function(r){ data.push([r.code,r.nom,r.cat].concat(r.m,[r.tot,r.ret,r.net,Math.round(r.avg*100)/100,r.stk,r.couv===null?'':Math.round(r.couv*10)/10,r.prix||'',Math.round(r.val*100)/100])); });
+  const ws=XLSX.utils.aoa_to_sheet(data); ws['!cols']=[{wch:12},{wch:50},{wch:20}].concat(MOIS_C.map(function(){return {wch:9};}),[{wch:12},{wch:9},{wch:9},{wch:14},{wch:11},{wch:16},{wch:9},{wch:14}]);
   XLSX.utils.book_append_sheet(wb,ws,('Conso '+art.year).substring(0,31));
-  const ys=C.years, d2=[['Code','Désignation','Catégorie'].concat(ys,['Total'])];
+  const ys=C.years, hd=['Code','Désignation','Catégorie'];
+  ys.forEach(function(y){ hd.push(y+' sorties',y+' retours'); }); hd.push('Total sorties','Total retours','Net');
+  const d2=[hd];
   [...CATALOGUE,...customRefsCache].forEach(function(p){
     const b=C.by[p.code]; if(!b||(p.cat===DLM_CAT&&!canSeeDlm())) return;
-    d2.push([p.code,getEffectiveName(p.code,p.nom),p.cat].concat(ys.map(function(y){let t=0; for(let i=1;i<=12;i++) t+=b.months[y+'-'+String(i).padStart(2,'0')]||0; return t;}),[b.tot]));
+    const line=[p.code,getEffectiveName(p.code,p.nom),p.cat]; let ts=0,tr=0;
+    ys.forEach(function(y){ const t=artYearTotals(b,y); line.push(t.s,t.r); ts+=t.s; tr+=t.r; });
+    d2.push(line.concat([ts,tr,ts-tr]));
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(d2),'Par année');
   XLSX.writeFile(wb,'Consommation_DELAMOTTE_'+art.year+'.xlsx'); showToast('Export consommation téléchargé ✅');
 }
-// ----- fiche d'un article -----
+
 function artRenderFiche(){
   document.getElementById('artBody').innerHTML='<div class="art-card"><input type="text" id="artQ" placeholder="🔍 Code ou nom de l\'article..." value="'+editEsc(art.fq)+'" oninput="artSearch(this.value)" style="width:100%;padding:10px;border:2px solid var(--border);border-radius:8px;font-size:0.9rem;background:var(--white);color:var(--text);box-sizing:border-box"><div id="artResults"></div></div><div id="artFiche"></div>';
   if(art.fq) artSearch(art.fq);
@@ -8924,27 +9048,31 @@ function artSearch(v){
 function artSelect(code){ art.code=code; art.fq=''; artRenderFiche(); }
 function artShowFiche(code){
   const p=artItem(code), el=document.getElementById('artFiche'); if(!p){ el.innerHTML=''; return; }
-  const C=artConso(), b=C.by[code]||{months:{},g:0,p:0,tot:0,lines:[]};
+  const C=artConso(), b=C.by[code]||{months:{},rm:{},g:0,p:0,tot:0,rtot:0,lines:[],rlines:[]};
   const ref=REFS_FOURN[code]||{}, prix=parseFloat(ref.prix)||0, stk=stockOf(code), now=new Date();
-  const last=[]; for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1), k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); last.push({lab:MOIS_C[d.getMonth()],q:b.months[k]||0}); }
-  const max=Math.max.apply(null,last.map(function(x){return x.q;}).concat([1])), tot12=last.reduce(function(s,x){return s+x.q;},0);
-  const avg6=last.slice(6).reduce(function(s,x){return s+x.q;},0)/6;
-  const couv=avg6>0?(stk===0?'<span class="art-up">stock à 0</span>':(Math.round(stk/avg6*10)/10).toLocaleString('fr-FR')+' mois de stock (moyenne des 6 derniers mois)'):'pas de consommation récente';
-  const yrs=C.years.map(function(y){ let t=0; for(let i=1;i<=12;i++) t+=b.months[y+'-'+String(i).padStart(2,'0')]||0; return {y:y,t:t,avg:t/artMonthsElapsed(y)}; }).filter(function(x){return x.t>0;});
+  const last=[]; for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1), k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); last.push({lab:MOIS_C[d.getMonth()],q:b.months[k]||0,r:b.rm[k]||0}); }
+  const max=Math.max.apply(null,last.map(function(x){return x.q;}).concat([1]));
+  const s12=last.reduce(function(s,x){return s+x.q;},0), r12=last.reduce(function(s,x){return s+x.r;},0), n12=s12-r12;
+  const avg6=last.slice(6).reduce(function(s,x){return s+x.q-x.r;},0)/6;
+  const couv=avg6>0?(stk===0?'<span class="art-up">stock à 0</span>':(Math.round(stk/avg6*10)/10).toLocaleString('fr-FR')+' mois de stock (moyenne nette des 6 derniers mois)'):'pas de consommation récente';
+  const yrs=C.years.map(function(y){ const t=artYearTotals(b,y); return {y:y,s:t.s,r:t.r,n:t.n,avg:t.n/artMonthsElapsed(y)}; }).filter(function(x){return x.s||x.r;});
   const lines=b.lines.slice().sort(function(a,c){return String(c.date).localeCompare(String(a.date));});
   const emp=EMPLACEMENTS[code]||'';
   el.innerHTML='<div class="art-card"><h4>['+code+'] '+editEsc(getEffectiveName(code,p.nom))+'</h4>'
     +'<span class="art-chip">'+editEsc(p.cat)+'</span><span class="art-chip">🏭 '+editEsc(ref.fournisseur||'fournisseur inconnu')+(ref.code_fourn?' · réf. '+editEsc(ref.code_fourn):'')+'</span>'+(emp?'<span class="art-chip">📍 '+editEsc(emp)+'</span>':'')
     +'<span class="art-chip">💶 '+(prix>0?fmtEur(prix):'prix inconnu')+'</span><span class="art-chip">📦 Stock : <b>'+artQty(stk)+'</b></span>'
     +'<div style="font-size:0.8rem;margin-top:6px">Couverture : '+couv+'</div></div>'
-    +'<div class="art-card"><h4>📊 Consommation — 12 derniers mois : '+artQty(tot12)+'</h4><div class="art-bars">'
-    +last.map(function(x){return '<div class="art-bar"><b>'+(x.q?artQty(x.q):'')+'</b><i style="height:'+Math.round(x.q/max*80)+'px"></i><small>'+x.lab+'</small></div>';}).join('')+'</div>'
-    +(yrs.length?'<div style="overflow-x:auto;margin-top:10px"><table class="art-table"><thead><tr><th>Année</th><th>Total</th><th>Moyenne / mois</th></tr></thead><tbody>'+yrs.map(function(x){return '<tr><td>'+x.y+'</td><td><b>'+artQty(x.t)+'</b></td><td>'+artQty(x.avg)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p style="color:var(--muted);font-size:0.8rem;margin-top:8px">Aucune commande traitée pour cet article.</p>')
-    +(b.tot?'<div style="font-size:0.78rem;color:var(--muted);margin-top:6px">Tout l\'historique : '+artQty(b.tot)+' (🔵 gros chantier '+artQty(b.g)+' · 🔴 001 particulier '+artQty(b.p)+')</div>':'')+'</div>'
+    +'<div class="art-card"><h4>📊 Consommation — 12 derniers mois</h4>'
+    +'<div style="margin-bottom:8px"><span class="art-chip">➖ Sorties : <b>'+artQty(s12)+'</b></span><span class="art-chip">↩️ Retours : <b class="art-down">−'+artQty(r12)+'</b></span><span class="art-chip">= Net : <b>'+artQty(n12)+'</b></span></div>'
+    +'<div class="art-bars">'+last.map(function(x){return '<div class="art-bar"><b>'+(x.q?artQty(x.q):'')+'</b><i style="height:'+Math.round(x.q/max*80)+'px"></i><small>'+x.lab+'</small><small class="art-down">'+(x.r?'−'+artQty(x.r):'')+'</small></div>';}).join('')+'</div>'
+    +(yrs.length?'<div style="overflow-x:auto;margin-top:10px"><table class="art-table"><thead><tr><th>Année</th><th>Sorties</th><th>Retours</th><th>Net</th><th>Moy. / mois (net)</th></tr></thead><tbody>'+yrs.map(function(x){return '<tr><td>'+x.y+'</td><td>'+artQty(x.s)+'</td><td class="art-down">'+(x.r?'−'+artQty(x.r):'·')+'</td><td><b>'+artQty(x.n)+'</b></td><td>'+artQty(x.avg)+'</td></tr>';}).join('')+'</tbody></table></div>':'<p style="color:var(--muted);font-size:0.8rem;margin-top:8px">Aucune commande traitée pour cet article.</p>')
+    +(b.tot||b.rtot?'<div style="font-size:0.78rem;color:var(--muted);margin-top:6px">Tout l\'historique : sorties '+artQty(b.tot)+' (🔵 gros chantier '+artQty(b.g)+' · 🔴 001 particulier '+artQty(b.p)+') · retours −'+artQty(b.rtot)+' · net '+artQty(b.tot-b.rtot)+'</div>':'')+'</div>'
     +'<div class="art-card" id="artPrix"><h4>💶 Évolution du prix</h4><p style="color:var(--muted);font-size:0.8rem">Chargement...</p></div>'
     +'<div class="art-card" id="artProv"><h4>🏭 Provenance (commandes fournisseur et réceptions)</h4><p style="color:var(--muted);font-size:0.8rem">Chargement...</p></div>'
     +'<div class="art-card"><h4>🏗️ Où est-il parti ? (commandes traitées)</h4>'+(lines.length?'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Date</th><th>Commande</th><th style="text-align:left">Chantier</th><th>Qté</th></tr></thead><tbody>'
       +lines.slice(0,15).map(function(l){return '<tr><td>'+mvtDate(l.date).slice(0,10)+'</td><td>'+l.id+' '+(l.svc==='particulier'?'🔴':'🔵')+'</td><td class="wrap">'+editEsc(l.chantier||'')+'</td><td><b>'+artQty(l.qty)+'</b></td></tr>';}).join('')+'</tbody></table></div>'+(lines.length>15?'<div style="font-size:0.74rem;color:var(--muted);margin-top:6px">'+(lines.length-15)+' autre(s) commande(s) plus ancienne(s) non affichée(s)</div>':''):'<p style="color:var(--muted);font-size:0.8rem">Aucune commande traitée.</p>')+'</div>'
+    +(b.rlines.length?'<div class="art-card"><h4>↩️ Retours de chantier (matériel rendu)</h4><div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Date</th><th>Bon</th><th style="text-align:left">Chantier</th><th>Qté remise en stock</th></tr></thead><tbody>'
+      +b.rlines.slice().sort(function(a,c){return String(c.date).localeCompare(String(a.date));}).slice(0,15).map(function(l){return '<tr><td>'+mvtDate(l.date).slice(0,10)+'</td><td>'+l.id+' '+(l.svc==='particulier'?'🔴':'🔵')+'</td><td class="wrap">'+editEsc(l.chantier||'')+'</td><td><b>'+artQty(l.qty)+'</b></td></tr>';}).join('')+'</tbody></table></div></div>':'')
     +'<div class="art-card" id="artMvt"><h4>📜 Mouvements du stock</h4><p style="color:var(--muted);font-size:0.8rem">Chargement...</p></div>';
   Promise.all([artLoadPrix(),artLoadHist()]).then(function(){ if(art.code===code){ artRenderPrix(code); artRenderProv(code); } });
   artLoadMvt(code).then(function(rows){ if(art.code===code) artRenderMvt(code,rows); });
@@ -9017,10 +9145,11 @@ function artRenderProv(code){
 }
 function artRenderMvt(code,rows){
   const el=document.getElementById('artMvt'); if(!el) return;
-  const ent=rows.filter(function(m){return m.delta>0;}).reduce(function(s,m){return s+m.delta;},0), sor=rows.filter(function(m){return m.delta<0;}).reduce(function(s,m){return s-m.delta;},0);
+  const sum=function(types){ return rows.filter(function(m){return types.indexOf(m.type)!==-1;}).reduce(function(s,m){return s+(m.delta||0);},0); };
+  const rec=sum(['reception']), ret=sum(['retour','annulretour']), sor=-sum(['commande','annulation']), cor=sum(['inventaire']);
   const since=rows.length?mvtDate(rows[rows.length-1].date).slice(0,10):'';
   el.innerHTML='<h4>📜 Mouvements du stock</h4>'
-    +(rows.length?'<div style="font-size:0.82rem;margin-bottom:6px">Depuis le '+since+' : <span class="mvt-delta-p">+'+artQty(ent)+' entrées</span> · <span class="mvt-delta-m">−'+artQty(sor)+' sorties</span> · '+rows.length+' mouvement(s)</div>'+rows.slice(0,30).map(mvtRowHtml).join('')+(rows.length>30?'<div style="font-size:0.74rem;color:var(--muted);margin-top:6px">'+(rows.length-30)+' mouvement(s) plus ancien(s) : voir le journal complet</div>':''):'<p style="color:var(--muted);font-size:0.82rem">Aucun mouvement enregistré pour cet article.</p>')
+    +(rows.length?'<div style="font-size:0.82rem;margin-bottom:6px">Depuis le '+since+' : 🚚 réceptions <span class="mvt-delta-p">+'+artQty(rec)+'</span> · ↩️ retours de chantier <span class="mvt-delta-p">+'+artQty(ret)+'</span> · 📦 commandes <span class="mvt-delta-m">−'+artQty(sor)+'</span>'+(cor?' · ✏️ corrections d\'inventaire <b>'+(cor>0?'+':'')+artQty(cor)+'</b>':'')+' · '+rows.length+' mouvement(s)</div>'+rows.slice(0,30).map(mvtRowHtml).join('')+(rows.length>30?'<div style="font-size:0.74rem;color:var(--muted);margin-top:6px">'+(rows.length-30)+' mouvement(s) plus ancien(s) : voir le journal complet</div>':''):'<p style="color:var(--muted);font-size:0.82rem">Aucun mouvement enregistré pour cet article.</p>')
     +'<button class="btn-print" style="margin-top:8px;background:#34495e" data-code="'+code+'" onclick="openMvtModal(this.dataset.code)">📜 Journal complet</button>';
 }
 function exportStockExcel(){
@@ -9386,7 +9515,8 @@ function resetStock(){
   if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); return; }
   const count=Object.keys(stockCache).length, batch=db.batch();
   batch.set(STOCK_DOC(),{items:{},resetAt:new Date().toISOString()});
-  mvtSummary(batch,'reset',count+' article(s) remis à zéro',[]);
+  const det=[]; Object.keys(stockCache).forEach(function(c){ const q=stockOf(c); if(q) det.push({code:c,s:'',a:q,b:0}); });
+  mvtSummary(batch,'reset',count+' article(s) remis à zéro',det);
   batch.commit().then(function(){
     stockCache={}; stockCacheP={}; stockTrkG={}; stockTrkP={};
     showToast('✅ Stock réinitialisé ('+count+' articles)');
