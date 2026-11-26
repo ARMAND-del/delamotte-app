@@ -609,7 +609,7 @@ const db = firebase.firestore();
       <button onclick="retourReceiveClose()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
     </div>
     <div id="retRecvTitle" style="font-weight:700;font-size:0.85rem;margin-bottom:6px;"></div>
-    <p style="font-size:0.78rem;color:var(--muted);">Indique les quantités réellement reçues. Elles sont remises dans le stock du service du bon (🔵 gros chantier ou 🔴 particulier), et le réappro du chantier baisse d'autant (dans la limite de ce qu'il avait pris). Mets 0 pour un article non remis en stock.</p>
+    <p style="font-size:0.78rem;color:var(--muted);">Indique les quantités réellement reçues. Elles sont remises dans le stock, et le réappro du chantier baisse d'autant (dans la limite de ce qu'il avait pris). Mets 0 pour un article non remis en stock.</p>
     <div id="retRecvItems"></div>
     <div style="display:flex;gap:10px;margin-top:16px;">
       <button onclick="retourReceiveClose()" style="flex:1;padding:12px;background:var(--gray);border:none;border-radius:8px;font-size:0.9rem;cursor:pointer;color:var(--text);">Annuler</button>
@@ -642,7 +642,7 @@ const db = firebase.firestore();
     </div>
     <div class="cost-ctl">
       <input type="text" id="mvtQ" placeholder="🔍 Code, nom, n° de commande..." oninput="mvtFilter.q=this.value;mvtRender()" style="flex:1;min-width:140px;">
-      <select id="mvtSvc" onchange="mvtFilter.svc=this.value;mvtRender()"><option value="all">🔵🔴 Les 2 stocks</option><option value="gros">🔵 Gros chantier</option><option value="particulier">🔴 Particulier</option></select>
+      <select id="mvtSvc" onchange="mvtFilter.svc=this.value;mvtRender()"><option value="all">Tous les mouvements</option><option value="gros">🔵 Commandes gros chantier</option><option value="particulier">🔴 Commandes particulier</option></select>
       <select id="mvtType" onchange="mvtFilter.type=this.value;mvtRender()"></select>
     </div>
     <div id="mvtCount" style="font-size:0.76rem;color:var(--muted);margin-bottom:4px;"></div>
@@ -5680,9 +5680,9 @@ function excelParseTabs(wb){
     };
     if(dlmLayout){ col.code=dlmCodeCol; col.emp=-1; }   // page DLM : code lu dans la colonne détectée ; pas d'emplacement
     if(col.code===-1||col.nom===-1) return;
-    // stock : jamais lu depuis la page DLM (quantités non attribuées à un service) ; ailleurs : rouge = « QUANTITE MAG » (ou « QUANTITE » seule) = particulier, bleu = « QUANTITE GC » = gros chantier
-    const colP=dlmLayout?-1:(col.qMag!==-1?col.qMag:col.qLone);
-    const colG=dlmLayout?-1:col.qGc;
+    // stock : UN SEUL stock = colonne « QUANTITE TOTAL » ; anciens fichiers sans cette colonne : MAG + GC (ou « QUANTITE » seule) ; jamais lu dans l'ancienne disposition de la page DLM
+    const colT=dlmLayout?-1:H.findIndex(function(v){return v.indexOf('quantite')===0&&v.indexOf('total')!==-1&&v.indexOf('cout')===-1;});
+    const colSum=(dlmLayout||colT!==-1)?[]:[col.qMag,col.qGc,col.qLone].filter(function(c){return c!==-1;});
     sheets.push(sname);
     const num=function(v){const n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n;};
     const txt=function(c,r){return c===-1?'':String(r[c]===undefined?'':r[c]).replace(/[\r\n\t\u2028\u2029]+/g,' ').trim().replace(/\.0+$/,'');};
@@ -5691,11 +5691,14 @@ function excelParseTabs(wb){
       const code=String(row[col.code]===undefined?'':row[col.code]).trim().replace(/\.0+$/,'');
       if(!/^\d{5,7}$/.test(code)) continue;
       const nomRaw=String(row[col.nom]===undefined?'':row[col.nom]).replace(/[\r\n\t\u2028\u2029]+/g,' ').trim();
+      // quantité : une case vide ou non numérique = « pas de valeur » (le stock de l'appli n'est pas touché) ; 0 saisi = stock à 0
+      const tv=function(c){const v=row[c]; if(v===undefined||v===null||String(v).trim()==='') return null; const n=parseFloat(String(v).replace(',','.')); return isNaN(n)?null:n;};
+      let qT=null;
+      if(colT!==-1) qT=tv(colT);
+      else if(colSum.length){ const vals=colSum.map(tv).filter(function(x){return x!==null;}); if(vals.length) qT=vals.reduce(function(s,x){return s+x;},0); }
       (byCode[code]=byCode[code]||[]).push({code:code,sheet:sname,key:key,nom:nomRaw,
         fourn:txt(col.fourn,row),cf:txt(col.cf,row),emp:txt(col.emp,row),prix:col.prix===-1?0:num(row[col.prix]),
-        hasG:colG!==-1,hasP:colP!==-1,
-        qG:colG!==-1?Math.max(0,Math.round(num(row[colG]))):0,
-        qP:colP!==-1?Math.max(0,Math.round(num(row[colP]))):0});
+        hasT:qT!==null,qT:qT!==null?Math.max(0,Math.round(qT)):0});
     }
   });
   return {byCode:byCode,sheets:sheets};
@@ -5714,7 +5717,7 @@ function excelPickEntry(entries,cat){
   if(pref.length===1) return {e:pref[0]};
   if(cat==='HTA'||cat==='Electrozingué'){const a=entries.filter(function(e){return EXCEL_NO_NEW.indexOf(e.key)!==-1;});if(a.length===1) return {e:a[0]};}
   const e0=entries[0];
-  const same=entries.every(function(e){return e.nom===e0.nom&&e.fourn===e0.fourn&&e.cf===e0.cf&&e.prix===e0.prix&&e.qG===e0.qG&&e.qP===e0.qP&&e.emp===e0.emp;});
+  const same=entries.every(function(e){return e.nom===e0.nom&&e.fourn===e0.fourn&&e.cf===e0.cf&&e.prix===e0.prix&&e.hasT===e0.hasT&&e.qT===e0.qT&&e.emp===e0.emp;});
   return same?{e:e0}:{conflict:true};
 }
 // compare Excel et application : ne retient que ce qui change
@@ -5768,10 +5771,9 @@ function excelBuildDiff(parsed){
     if(np>0&&Math.abs((parseFloat(cur.prix)||0)-np)>0.004) D.prix.push({code:code,prix:np,old:parseFloat(cur.prix)||0});
     const emp=(e.emp&&['0','x','-'].indexOf(e.emp.toLowerCase())===-1)?e.emp:'';
     if(emp&&emp!==(EMPLACEMENTS[code]||'')) D.emp.push({code:code,emp:emp,old:EMPLACEMENTS[code]||''});
-    if(e.hasG||e.hasP){
-      const g=e.hasG?e.qG:0, p=e.hasP?e.qP:0;
-      if(g!==stockOf(code,'gros')) D.stockG.push({code:code,qty:g,old:stockOf(code,'gros')});
-      if(p!==stockOf(code,'particulier')) D.stockP.push({code:code,qty:p,old:stockOf(code,'particulier')});
+    if(e.hasT){   // un seul stock : quantité totale du fichier
+      const cur=stockOf(code);
+      if(e.qT!==cur) D.stockG.push({code:code,qty:e.qT,old:cur});
     }
   });
   return D;
@@ -5811,8 +5813,7 @@ function excelSyncRender(){
   html+=sec('fourn','Fournisseurs / réf. fournisseur',D.fourn,function(x){return x.code+' : '+cut(x.old,24)+' → '+cut(x.fournisseur+' / '+x.code_fourn,24);});
   html+=sec('prix','Prix',D.prix,function(x){return x.code+' : '+x.old.toFixed(2)+' € → '+x.prix.toFixed(2)+' €';});
   html+=sec('emp','Emplacements',D.emp,function(x){return x.code+' : '+cut(x.old||'—',14)+' → '+cut(x.emp,14);});
-  html+=sec('stockG','🔵 Stock gros chantier (colonne QUANTITE GC)',D.stockG,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
-  html+=sec('stockP','🔴 Stock particulier (colonne QUANTITE MAG)',D.stockP,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
+  html+=sec('stockG','📦 Stock (colonne QUANTITE TOTAL)',D.stockG,function(x){return x.code+' : '+x.old+' → '+x.qty;},'Les valeurs de l\'appli sont remplacées par celles du fichier.');
   if(D.bloques.length) html+='<div style="margin-top:10px;padding:10px;background:#fff3cd;border-radius:8px;font-size:0.78rem;color:#856404"><b>⚠️ Non appliqué (nom de carte du menu raccourci) :</b><br>'+D.bloques.map(function(b){return '« '+cut(b.avant,40)+' » → « '+cut(b.apres,40)+' » ('+b.codes.length+' réf.)';}).join('<br>')+'<br>Corrigez ces noms dans le fichier pour qu\'ils soient homogènes.</div>';
   if(D.conflits.length) html+='<div style="margin-top:10px;padding:10px;background:#fdecea;border-radius:8px;font-size:0.78rem;color:#c0392b"><b>Ignoré (présent dans plusieurs onglets avec des données différentes) :</b> '+D.conflits.slice(0,12).map(editEsc).join(', ')+(D.conflits.length>12?'…':'')+'</div>';
   el.innerHTML=html;
@@ -5825,15 +5826,15 @@ function excelSyncApply(){
   const ops=[], refsPatch={}, empPatch={}, n={};
   if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
   const stockItems={};   // tous les changements de stock dans UNE seule écriture
-  if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){(stockItems[x.code]=stockItems[x.code]||{}).qty=x.qty;}); }
+  if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){stockItems[x.code]={qty:x.qty,qtyP:0};}); }   // un seul stock : l'ancien stock « particulier » est remis à 0
   if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){(stockItems[x.code]=stockItems[x.code]||{}).qtyP=x.qty;}); }
   if(Object.keys(stockItems).length){
     if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); return; }
     ops.push(function(b){b.set(STOCK_DOC(),{items:stockItems},{merge:true});});
   }
   if(n.stockG||n.stockP){
-    const det=[]; if(n.stockG) D.stockG.forEach(function(x){det.push({code:x.code,s:'gros',a:x.old,b:x.qty});}); if(n.stockP) D.stockP.forEach(function(x){det.push({code:x.code,s:'particulier',a:x.old,b:x.qty});});
-    ops.push(function(b){mvtSummary(b,'synchro','Synchronisation Excel : '+(n.stockG||0)+' stock(s) 🔵 et '+(n.stockP||0)+' stock(s) 🔴 remplacés par les valeurs du fichier',det);});
+    const det=[]; if(n.stockG) D.stockG.forEach(function(x){det.push({code:x.code,s:'',a:x.old,b:x.qty});}); if(n.stockP) D.stockP.forEach(function(x){det.push({code:x.code,s:'particulier',a:x.old,b:x.qty});});
+    ops.push(function(b){mvtSummary(b,'synchro','Synchronisation Excel : '+(n.stockG||0)+' stock(s) remplacés par la quantité totale du fichier',det);});
   }
   if(on('fourn')){ n.fourn=D.fourn.length; D.fourn.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{fournisseur:x.fournisseur,code_fourn:x.code_fourn});}); }
   if(on('prix')){ n.prix=D.prix.length; D.prix.forEach(function(x){refsPatch[x.code]=Object.assign({},REFS_FOURN[x.code]||{},refsPatch[x.code]||{},{prix:String(x.prix)});}); }
@@ -5847,7 +5848,7 @@ function excelSyncApply(){
   if(Object.keys(empPatch).length) p=p.then(function(){return db.collection('config').doc('emplacements').set(Object.assign({_updatedAt:now},empPatch),{merge:true});}).then(function(){Object.assign(EMPLACEMENTS,empPatch);});
   p.then(function(){
     const parts=[]; if(n.noms) parts.push(n.noms+' désignation(s)'); if(n.fourn) parts.push(n.fourn+' fournisseur(s)'); if(n.prix) parts.push(n.prix+' prix'); if(n.emp) parts.push(n.emp+' emplacement(s)');
-    if(n.stockG) parts.push(n.stockG+' stock(s) 🔵'); if(n.stockP) parts.push(n.stockP+' stock(s) 🔴');
+    if(n.stockG) parts.push(n.stockG+' stock(s)');
     showToast('✅ Synchronisation terminée : '+parts.join(', '));
     excelSyncClose();
     filterProducts(); if(document.getElementById('tabInventaire').style.display!=='none') renderInventaire();
@@ -5986,7 +5987,7 @@ function mvtRowHtml(m){
   const dl=m.delta>0?'<span class="mvt-delta-p">+'+m.delta+'</span>':'<span class="mvt-delta-m">'+m.delta+'</span>';
   return '<div class="mvt-row"><div class="mvt-top"><span>'+editEsc(typ)+(m.ref?' · '+editEsc(m.ref):'')+'</span><span>'+mvtDate(m.date)+'</span></div>'
     +'<div><b>'+editEsc(m.code)+'</b> — '+editEsc(m.nom||articleName(m.code))+'</div>'
-    +'<div>'+svcIcon(m.service)+' '+m.avant+' → <b>'+m.apres+'</b> ('+dl+')'+(m.comment?' · <i>'+editEsc(m.comment)+'</i>':'')+'</div>'
+    +'<div>'+(m.service?svcIcon(m.service)+' ':'')+m.avant+' → <b>'+m.apres+'</b> ('+dl+')'+(m.comment?' · <i>'+editEsc(m.comment)+'</i>':'')+'</div>'
     +'<div class="mvt-top"><span>par '+editEsc(m.user||'')+'</span></div></div>';
 }
 function mvtRender(){
@@ -6026,7 +6027,7 @@ function retourUndo(id){
   const r=retoursCache.find(function(x){return x.id===id;});
   if(!r||r.status!=='received'||currentRole!=='admin') return;
   const lignes=r.receivedItems||[], svc=r.stockService||retourSvc(r);
-  if(!confirm('Annuler le traitement du bon '+id+' ?\nLes quantités remises en stock ('+svcIcon(svc)+') seront retirées et le réappro rétabli. Le bon repasse « à traiter ».')) return;
+  if(!confirm('Annuler le traitement du bon '+id+' ?\nLes quantités remises en stock seront retirées et le réappro rétabli. Le bon repasse « à traiter ».')) return;
   const batch=db.batch(), now=new Date().toISOString();
   lignes.forEach(function(l){
     const cur=stockOf(l.code,svc), nv=Math.max(0,cur-(l.stock||0));
@@ -6047,15 +6048,15 @@ function retourUndo(id){
 // ===== ALERTES STOCK BAS (articles dont le stock est suivi et ≤ seuil) =====
 let alertSvcOpen='gros';
 function stockAlertList(svc){
-  const trk=svc==='particulier'?stockTrkP:stockTrkG;
-  return [...CATALOGUE,...customRefsCache].filter(function(p){return trk[p.code]&&stockOf(p.code,svc)<=invSeuilAlerte;})
-    .map(function(p){return {code:p.code,nom:getEffectiveName(p.code,p.nom),cat:p.cat,qty:stockOf(p.code,svc)};})
+  return [...CATALOGUE,...customRefsCache].filter(function(p){return (stockTrkG[p.code]||stockTrkP[p.code])&&stockOf(p.code)<=invSeuilAlerte;})
+    .map(function(p){return {code:p.code,nom:getEffectiveName(p.code,p.nom),cat:p.cat,qty:stockOf(p.code)};})
     .sort(function(a,b){return (a.qty-b.qty)||a.nom.localeCompare(b.nom,'fr');});
 }
+
 function openStockAlerts(svc){
   alertSvcOpen=svc==='particulier'?'particulier':'gros';
   const list=stockAlertList(alertSvcOpen);
-  document.getElementById('alertTitle').textContent='⚠️ Stock bas '+svcIcon(alertSvcOpen)+' '+(alertSvcOpen==='particulier'?'Particulier':'Gros chantier')+' (≤ '+invSeuilAlerte+')';
+  document.getElementById('alertTitle').textContent='⚠️ Stock bas (≤ '+invSeuilAlerte+')';
   document.getElementById('alertList').innerHTML=list.length?list.map(function(a){
     const col=a.qty===0?'var(--red)':'var(--orange)';
     return '<div class="mvt-row"><div class="mvt-top"><span>'+editEsc(a.code)+' · '+editEsc(a.cat)+'</span><span style="color:'+col+';font-weight:800">'+(a.qty===0?'❌ Rupture':'⚠️ '+a.qty)+'</span></div><div>'+editEsc(a.nom)+'</div></div>';
@@ -6067,7 +6068,7 @@ function alertExport(){
   const list=stockAlertList(alertSvcOpen), data=[['Code','Désignation','Catégorie','Stock','Fournisseur','Code fournisseur','Prix U.']];
   list.forEach(function(a){const r=REFS_FOURN[a.code]||{}; data.push([a.code,a.nom,a.cat,a.qty,r.fournisseur||'',r.code_fourn||'',r.prix?parseFloat(r.prix):'']);});
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(data),'Stock bas');
-  XLSX.writeFile(wb,'Stock_bas_'+(alertSvcOpen==='particulier'?'particulier':'gros_chantier')+'_'+isoDay(new Date())+'.xlsx'); showToast('Liste exportée ✅');
+  XLSX.writeFile(wb,'Stock_bas_'+isoDay(new Date())+'.xlsx'); showToast('Liste exportée ✅');
 }
 
 // ===== SAUVEGARDE : EXPORT DE TOUTES LES DONNÉES =====
@@ -6087,8 +6088,8 @@ function backupMark(){
 function backupBuildSheets(D){
   const sv=function(s){return s==='particulier'?'001 Particulier':'Gros chantier';}, px=function(c){return parseFloat((REFS_FOURN[c]||{}).prix)||0;};
   const S=[];
-  const art=[['Code','Désignation','Catégorie','Fournisseur','Code fournisseur','Prix U.','Emplacement','Stock gros chantier','Stock particulier','Valeur gros chantier','Valeur particulier']];
-  [...CATALOGUE,...customRefsCache].forEach(function(p){const r=REFS_FOURN[p.code]||{},g=stockOf(p.code,'gros'),q=stockOf(p.code,'particulier'),pr=px(p.code); art.push([p.code,getEffectiveName(p.code,p.nom),p.cat,r.fournisseur||'',r.code_fourn||'',pr||'',EMPLACEMENTS[p.code]||'',g,q,Math.round(g*pr*100)/100,Math.round(q*pr*100)/100]);});
+  const art=[['Code','Désignation','Catégorie','Fournisseur','Code fournisseur','Prix U.','Emplacement','Stock','Valeur stock']];
+  [...CATALOGUE,...customRefsCache].forEach(function(p){const r=REFS_FOURN[p.code]||{},q=stockOf(p.code),pr=px(p.code); art.push([p.code,getEffectiveName(p.code,p.nom),p.cat,r.fournisseur||'',r.code_fourn||'',pr||'',EMPLACEMENTS[p.code]||'',q,Math.round(q*pr*100)/100]);});
   S.push({name:'Articles et stock',rows:art});
   const cmd=[['N° commande','Date','Service','Chantier','Demandeur','Saisi par','Statut','Livraison estimée','Code','Désignation','Quantité','Barres','Prix U.','Total HT','Commentaire','Supprimée']];
   D.orders.slice().sort(function(a,b){return String(a.createdAt).localeCompare(String(b.createdAt));}).forEach(function(o){(o.items||[]).forEach(function(i){const pr=px(i.code); cmd.push([o.id,o.date||'',sv(orderSvc(o)),o.chantier||'',o.chef||'',o.user||'',o.status==='done'?'Traitée':'En attente',o.dateLivraison||'',i.code,i.nom,i.qty,i.barres||'',pr||'',Math.round(i.qty*pr*100)/100,o.comment||'',o.deleted?'oui':'']);});});
@@ -7176,12 +7177,12 @@ function retourReceiveOpen(id){
   const svc=retourSvc(r);
   retourReceiveId=id;
   retourReceiveState={qty:r.items.map(function(it){return editItemQtyView(it);}),bad:{}};
-  document.getElementById('retRecvTitle').textContent=r.id+' — '+r.chantier+(r.nomChantier?' — '+r.nomChantier:'')+' · '+svcIcon(svc)+' stock '+(svc==='particulier'?'particulier':'gros chantier');
+  document.getElementById('retRecvTitle').textContent=r.id+' — '+r.chantier+(r.nomChantier?' — '+r.nomChantier:'')+' · '+svcIcon(svc)+' '+(svc==='particulier'?'001 Particulier':'Gros chantier');
   document.getElementById('retRecvItems').innerHTML=r.items.map(function(it,i){
     const isB=it.barres!==undefined&&it.barres!==null, st=stockOf(it.code,svc);
     const em=EMPLACEMENTS[it.code]?' · 📍 '+editEsc(EMPLACEMENTS[it.code]):'';
     return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">'
-      +'<div style="flex:1;min-width:0;font-size:0.82rem;"><span style="color:var(--muted);font-size:0.72rem">'+editEsc(it.code)+em+' · stock '+svcIcon(svc)+' actuel : '+st+'</span><br><span style="font-weight:600;overflow-wrap:anywhere">'+editEsc(it.nom)+'</span></div>'
+      +'<div style="flex:1;min-width:0;font-size:0.82rem;"><span style="color:var(--muted);font-size:0.72rem">'+editEsc(it.code)+em+' · stock actuel : '+st+'</span><br><span style="font-weight:600;overflow-wrap:anywhere">'+editEsc(it.nom)+'</span></div>'
       +'<div style="text-align:center;"><input type="number" min="0" value="'+retourReceiveState.qty[i]+'" oninput="retourReceiveQty('+i+',this.value)" style="width:64px;padding:5px 6px;border:1.5px solid var(--border);border-radius:6px;text-align:center;font-size:0.9rem;background:var(--white);color:var(--text);">'
       +'<div id="retrecvinfo_'+i+'" style="font-size:0.68rem;color:var(--muted)">'+(isB?('barre'+(it.barres>1?'s':'')+' = '+it.qty+' ml'):'remis en stock')+'</div></div></div>';
   }).join('');
@@ -7231,7 +7232,7 @@ function retourReceiveConfirm(){
   if(!lignes.length){showToast('⚠️ Aucune quantité reçue : rien à remettre en stock');return;}
   batch.update(db.collection('retours').doc(r.id),{status:'received',receivedAt:now,receivedBy:currentUser,receivedItems:lignes,reapproAjuste:reappro,stockService:svc});
   batch.commit().then(function(){
-    showToast('✅ Retour traité : '+lignes.length+' référence(s) remise(s) dans le stock '+svcIcon(svc)+(reappro.length?' — réappro ajusté ('+reappro.length+')':''));
+    showToast('✅ Retour traité : '+lignes.length+' référence(s) remise(s) dans le stock'+(reappro.length?' — réappro ajusté ('+reappro.length+')':''));
     retourReceiveClose();
     renderRetoursList();
   }).catch(function(e){
@@ -7304,10 +7305,10 @@ function markDone(id){
     const give0=enStock?item.qty:(stockQty>0&&canPart?stockQty:item.qty);   // proposé : tout si le stock suffit, sinon ce qu'il y a en stock
     if(!chk||(chk&&give0<item.qty)) hasMissing=true;
     const stockInfo=stockQty===0
-      ?`<span style="color:var(--red);font-size:0.72rem">❌ Rupture ${icoO}</span>`
+      ?`<span style="color:var(--red);font-size:0.72rem">❌ Rupture</span>`
       :stockPartiel
-        ?`<span style="color:var(--orange);font-size:0.72rem">⚠️ Stock ${icoO}: ${stockQty} / Demandé: ${item.qty}</span>`
-        :`<span style="color:var(--green);font-size:0.72rem">✅ Stock ${icoO}: ${stockQty}</span>`;
+        ?`<span style="color:var(--orange);font-size:0.72rem">⚠️ Stock : ${stockQty} / Demandé : ${item.qty}</span>`
+        :`<span style="color:var(--green);font-size:0.72rem">✅ Stock : ${stockQty}</span>`;
     return `<div style="padding:7px 0;border-bottom:1px solid var(--border);">
       <div style="display:flex;align-items:center;gap:8px;">
         <input type="checkbox" id="dlv_${i}" ${chk?'checked':''} onchange="updateMissingMsg()" style="width:16px;height:16px;cursor:pointer;flex-shrink:0">
@@ -7543,12 +7544,12 @@ function renderDashboard(){
   const todayOrders=all.filter(o=>o.date.startsWith(today));
   const pending=all.filter(o=>o.status==='pending').length;
   const done=all.filter(o=>o.status==='done').length;
-  const aG=stockAlertList('gros').length, aP=stockAlertList('particulier').length;
-  const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">'+svcIcon(svc)+' Stock bas</div></div>';};
+  const aG=stockAlertList('gros').length;
+  const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">📦 Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
     <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées</div></div>`+al('gros',aG)+al('particulier',aP);
+    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées</div></div>`+al('gros',aG);
 }
 
 function clearDateFilter(){
@@ -8049,12 +8050,10 @@ function confirmReception(){
     const qtyCommandee=a.qtyEnCommande||a.totalQty||0;
     const qtyReliquat=qtyCommandee-qtyRecu;
     if(qtyRecu>0){
-      const sp=splitReception(qtyRecu,reapproStockCache[code]);   // réparti selon le besoin de chaque service
-      const curG=stockCache[code]||0, curP=stockCacheP[code]||0;
-      stockPatch(batch,code,{qty:curG+sp.gros,qtyP:curP+sp.particulier});
-      stockCache[code]=curG+sp.gros; stockCacheP[code]=curP+sp.particulier;
-      if(sp.gros) mvtAdd(batch,{code:code,nom:a.nom,service:'gros',avant:curG,apres:curG+sp.gros,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
-      if(sp.particulier) mvtAdd(batch,{code:code,nom:a.nom,service:'particulier',avant:curP,apres:curP+sp.particulier,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
+      const cur=stockOf(code);   // un seul stock : toute la quantité reçue y est ajoutée
+      stockPatch(batch,code,{qty:cur+qtyRecu});
+      stockCache[code]=cur+qtyRecu; stockCacheP[code]=0;
+      mvtAdd(batch,{code:code,nom:a.nom,service:'',avant:cur,apres:cur+qtyRecu,type:'reception',ref:a.batigest||a.fournisseur||pendingReceptionFourn||''});
       const fourn=a.fournisseur||pendingReceptionFourn||'';
       if(!receptionsParFourn[fourn]) receptionsParFourn[fourn]=[];
       receptionsParFourn[fourn].push({code,nom:a.nom,qtyRecu,qtyCommandee,qtyReliquat:Math.max(0,qtyReliquat),batigest:a.batigest||''});
@@ -8465,19 +8464,15 @@ let stockAlertToasted=false;
 let invSvc='gros';      // stock affiché dans l'inventaire
 
 // ===== DEUX STOCKS : gros chantier (qty, bleu) et particulier (qtyP, rouge) =====
-function stockOf(code,svc){ return ((svc==='particulier'?stockCacheP:stockCache)[code])||0; }
-function stockField(svc){ return svc==='particulier'?'qtyP':'qty'; }
+function stockOf(code,svc){ return (stockCache[code]||0)+(stockCacheP[code]||0); }   // UN SEUL STOCK pour les 2 services (les anciennes quantités 🔴 sont additionnées)
+function stockField(svc){ return 'qty'; }   // un seul stock
 function svcIcon(svc){ return svc==='particulier'?'🔴':'🔵'; }
 function stockBadgesHtml(code){
-  const g=stockCache[code], p=stockCacheP[code];
-  if(g===undefined&&p===undefined) return '';
-  const part=function(icon,q){
-    const n=q||0, c=n===0?'var(--red)':(n<=invSeuilAlerte?'var(--orange)':'var(--green)');
-    return '<span style="color:'+c+'">'+icon+' '+n+'</span>';
-  };
-  return '<div style="font-size:0.7rem;font-weight:600;margin-bottom:4px">'+part('🔵',g)+' · '+part('🔴',p)+'</div>';
+  if(stockCache[code]===undefined&&stockCacheP[code]===undefined) return '';
+  const n=stockOf(code), c=n===0?'var(--red)':(n<=invSeuilAlerte?'var(--orange)':'var(--green)');
+  return '<div style="font-size:0.7rem;font-weight:600;margin-bottom:4px"><span style="color:'+c+'">📦 '+n+'</span></div>';
 }
-// part de chaque service dans le besoin de réappro (anciennes lignes sans détail : tout au gros chantier)
+
 function reapproServices(ex){
   if(!ex) return {gros:0,particulier:0};
   if(!ex.services) return {gros:ex.totalQty||0,particulier:0};
@@ -8486,15 +8481,13 @@ function reapproServices(ex){
 // répartition d'une quantité reçue du fournisseur entre les deux stocks, proportionnelle au besoin de chaque service
 function splitReception(q,ex){
   q=q>0?q:0;
-  const s=reapproServices(ex), tot=s.gros+s.particulier;
-  if(!(tot>0)||!q) return {gros:q,particulier:0};
-  const p=Math.min(q,Math.round(q*s.particulier/tot));
-  return {gros:q-p,particulier:p};
+  return {gros:q,particulier:0};   // un seul stock : tout est crédité au même endroit
 }
+
 function splitText(sp){
-  const t=(sp.gros?'🔵 '+sp.gros:'')+(sp.gros&&sp.particulier?' · ':'')+(sp.particulier?'🔴 '+sp.particulier:'');
-  return 'Stock crédité : '+(t||'—');
+  return 'Stock crédité : +'+((sp.gros||0)+(sp.particulier||0));
 }
+
 function getStock(){return stockCache;}
 
 // ===== STOCK : toutes les quantités dans UNE seule ligne (config/stock_all) au lieu d'une ligne par article =====
@@ -8502,6 +8495,7 @@ function STOCK_DOC(){ return db.collection('config').doc('stock_all'); }
 let stockDocReady=false;
 function stockPatch(batch,code,fields){
   if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); throw new Error('stock-not-ready'); }
+  if(fields.qty!==undefined&&fields.qtyP===undefined) fields=Object.assign({},fields,{qtyP:0});   // un seul stock : l'ancien stock « particulier » est ramené à 0 (déjà compté dans le total)
   batch.set(STOCK_DOC(),{items:{[code]:fields}},{merge:true});
 }
 // reprise des anciens stocks (une ligne par article) vers la ligne regroupée : une seule fois
@@ -8529,8 +8523,8 @@ function listenStock(){
     renderDashboard();
     if(currentRole==='admin'&&!stockAlertToasted){
       stockAlertToasted=true;
-      const g=stockAlertList('gros').length, p=stockAlertList('particulier').length;
-      if(g+p>0) showToast('⚠️ Stock bas : '+g+' article(s) 🔵 · '+p+' article(s) 🔴');
+      const g=stockAlertList('gros').length;
+      if(g>0) showToast('⚠️ Stock bas : '+g+' article(s)');
     }
   });
 }
@@ -8552,7 +8546,7 @@ function saveStockItem(code, qty, svc){
   svc=svc||'gros';
   const nv=Math.max(0,parseInt(qty)||0), cur=stockOf(code,svc), batch=db.batch();
   stockPatch(batch,code,{[stockField(svc)]:nv});
-  if(nv!==cur) mvtAdd(batch,{code:code,service:svc,avant:cur,apres:nv,type:'inventaire'});
+  if(nv!==cur) mvtAdd(batch,{code:code,service:'',avant:cur,apres:nv,type:'inventaire'});
   return batch.commit();
 }
 
@@ -8577,17 +8571,16 @@ function invFilteredItems(){
   });
 }
 function invRowHtml(p){
-  const qty=stockOf(p.code,invSvc), other=stockOf(p.code,invSvc==='gros'?'particulier':'gros');
+  const qty=stockOf(p.code);
   const badge=qty>invSeuilAlerte?'<span class="stock-badge stock-ok">✅ '+qty+'</span>':qty>0?'<span class="stock-badge stock-low">⚠️ '+qty+'</span>':'<span class="stock-badge stock-zero">❌ 0</span>';
   const isCustom=customRefsCache.some(r=>r.code===p.code);
   const r=REFS_FOURN[p.code], prix=r&&r.prix?parseFloat(r.prix).toFixed(2)+' €':'-';
-  const col=invSvc==='particulier'?'#e74c3c':'#0077b6';
+  const col='#0077b6';
   return '<tr>'
     +'<td style="font-size:0.75rem;color:var(--muted)">'+p.code+(isCustom?' <span style="background:#e3f2fd;color:var(--blue);font-size:0.65rem;padding:1px 5px;border-radius:8px">✏️</span>':'')+'</td>'
     +'<td>'+editEsc(getEffectiveName(p.code,p.nom))+'</td>'
     +'<td style="font-size:0.75rem">'+p.cat+'</td>'
     +'<td style="text-align:center"><input class="inv-qty-input" type="number" min="0" value="'+qty+'" style="border-color:'+col+'" onchange="saveAndRefreshStock(this,\''+p.code+'\')" onblur="this.style.borderColor=\''+col+'\'"></td>'
-    +'<td style="text-align:center;font-size:0.78rem;color:var(--muted);white-space:nowrap">'+svcIcon(invSvc==='gros'?'particulier':'gros')+' '+other+'</td>'
     +'<td style="text-align:right;font-size:0.82rem">'+prix+'</td>'
     +'<td style="text-align:center">'+badge+'</td>'
     +'<td style="text-align:center;white-space:nowrap">'
@@ -8601,7 +8594,7 @@ function renderInventaire(){
   const cats=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
   const allItems=[...CATALOGUE,...customRefsCache];
   const filtered=invFilteredItems();
-  const S=function(code){return stockOf(code,invSvc);};
+  const S=function(code){return stockOf(code);};
   const alertes=allItems.filter(p=>{const q=S(p.code);return q>0&&q<=invSeuilAlerte;}).length;
   const ruptures=allItems.filter(p=>S(p.code)===0).length;
   const enStock=allItems.filter(p=>S(p.code)>invSeuilAlerte).length;
@@ -8611,10 +8604,6 @@ function renderInventaire(){
   const tg='padding:10px 16px;border-radius:10px;font-size:0.88rem;font-weight:800;cursor:pointer;border:2px solid ';
   const gOn=invSvc==='gros', pOn=invSvc==='particulier';
   el.innerHTML=`
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-      <button onclick="setInvSvc('gros')" style="${tg}#0077b6;${gOn?'background:#0077b6;color:#fff':'background:var(--white);color:#0077b6'}">🔵 Stock gros chantier</button>
-      <button onclick="setInvSvc('particulier')" style="${tg}#e74c3c;${pOn?'background:#e74c3c;color:#fff':'background:var(--white);color:#e74c3c'}">🔴 Stock particulier</button>
-    </div>
     <div class="inv-stats">
       <div class="stat-card"><div class="stat-num" style="color:var(--green)">${enStock}</div><div class="stat-label">En stock</div></div>
       <div class="stat-card" onclick="showStockFaible()" style="cursor:pointer;transition:transform 0.15s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform=''"><div class="stat-num" style="color:var(--orange)">${alertes}</div><div class="stat-label">Stock faible 🔍</div></div>
@@ -8646,7 +8635,7 @@ function renderInventaire(){
     <div style="overflow-x:auto">
       <table class="inv-table">
         <thead><tr>
-          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock ${svcIcon(invSvc)}</th><th style="text-align:center">Autre stock</th><th style="text-align:right">Prix U.</th><th style="text-align:center">État</th><th></th>
+          <th>Code</th><th>Désignation</th><th>Catégorie</th><th style="text-align:center">Stock</th><th style="text-align:right">Prix U.</th><th style="text-align:center">État</th><th></th>
         </tr></thead>
         <tbody id="invTableBody">${filtered.map(invRowHtml).join('')}</tbody>
       </table>
@@ -8762,14 +8751,14 @@ function deleteCustomRef(code){
 
 function exportStockExcel(){
   const wb=XLSX.utils.book_new();
-  const data=[['Code','Désignation','Catégorie','Stock gros chantier (bleu)','Stock particulier (rouge)','État gros chantier','État particulier']];
+  const data=[['Code','Désignation','Catégorie','Stock','État']];
   const etat=function(q){return q>invSeuilAlerte?'OK':q>0?'Stock faible':'Rupture';};
   [...CATALOGUE,...customRefsCache].forEach(p=>{
-    const g=stockOf(p.code,'gros'), pa=stockOf(p.code,'particulier');
-    data.push([p.code,getEffectiveName(p.code,p.nom),p.cat,g,pa,etat(g),etat(pa)]);
+    const q=stockOf(p.code);
+    data.push([p.code,getEffectiveName(p.code,p.nom),p.cat,q,etat(q)]);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:15},{wch:50},{wch:20},{wch:14},{wch:14},{wch:15},{wch:15}];
+  ws['!cols']=[{wch:15},{wch:50},{wch:20},{wch:12},{wch:15}];
   XLSX.utils.book_append_sheet(wb,ws,'Inventaire');
   XLSX.writeFile(wb,`Inventaire_DELAMOTTE_${new Date().toLocaleDateString('fr-FR').replace(/\//g,'-')}.xlsx`);
   showToast('Export inventaire téléchargé ✅');
@@ -9119,11 +9108,11 @@ function importStockGC(event){
 }
 
 function resetStock(){
-  if(!confirm('Réinitialiser TOUT le stock à 0 (gros chantier ET particulier) ?\nCette action est irréversible.'))return;
+  if(!confirm('Réinitialiser TOUT le stock à 0 ?\nCette action est irréversible.'))return;
   if(!stockDocReady){ showToast('⏳ Stock en cours de chargement, réessayez dans un instant'); return; }
   const count=Object.keys(stockCache).length, batch=db.batch();
   batch.set(STOCK_DOC(),{items:{},resetAt:new Date().toISOString()});
-  mvtSummary(batch,'reset',count+' article(s) remis à zéro (stock gros chantier ET particulier)',[]);
+  mvtSummary(batch,'reset',count+' article(s) remis à zéro',[]);
   batch.commit().then(function(){
     stockCache={}; stockCacheP={}; stockTrkG={}; stockTrkP={};
     showToast('✅ Stock réinitialisé ('+count+' articles)');
