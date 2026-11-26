@@ -210,7 +210,8 @@ const db = firebase.firestore();
   .toast.show{opacity:1;}
   .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:2px solid var(--border);z-index:150;}
   .bottom-nav-inner{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .bnav-btn{min-width:58px;}
+  .bnav-btn{min-width:0;}
+  @media(max-width:360px){.bnav-btn{font-size:0.62rem;}.bnav-icon{font-size:1.15rem;}}
   .bnav-btn{flex:1;padding:10px 0;border:none;background:none;font-size:0.7rem;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
   .bnav-btn.active{color:var(--blue);}
   .user-mgmt-card{background:var(--white);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -323,6 +324,9 @@ const db = firebase.firestore();
   .dark-toggle{background:rgba(255,255,255,0.15);border:none;color:var(--white);padding:6px 10px;border-radius:6px;cursor:pointer;font-size:1rem;}
   /* NOTIFICATION BADGE */
   .nav-tab{position:relative;}
+  .subnav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px 0;}
+  .subnav button{padding:8px 16px;border-radius:20px;border:2px solid var(--border);background:var(--white);color:var(--muted);font-weight:700;font-size:0.84rem;cursor:pointer;}
+  .subnav button.on{background:var(--blue);color:#fff;border-color:var(--blue);}
   .tab-badge{position:absolute;top:4px;right:4px;background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;font-size:0.65rem;font-weight:800;display:none;align-items:center;justify-content:center;}
   .tab-badge.show{display:flex;}
   .bnav-badge{position:absolute;top:4px;right:calc(50% - 14px);background:var(--red);color:#fff;border-radius:50%;width:16px;height:16px;font-size:0.65rem;font-weight:800;display:none;align-items:center;justify-content:center;}
@@ -403,16 +407,11 @@ const db = firebase.firestore();
     </div>
   </div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showTab('catalogue')">&#128230; Catalogue</button>
-    <button class="nav-tab" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span></button>
-    <button class="nav-tab" id="nav-tab-users" style="display:none" onclick="showTab('users')">&#128100; Utilisateurs</button>
-    <button class="nav-tab" id="nav-tab-suivi" style="display:none" onclick="showTab('suivi')">&#128205; Suivi</button>
-    <button class="nav-tab" id="nav-tab-stats" style="display:none" onclick="showTab('stats')">&#128202; Statistiques</button>
-    <button class="nav-tab" id="nav-tab-corbeille" style="display:none" onclick="showTab('corbeille')">🗑️ Corbeille</button>
-    <button class="nav-tab" id="nav-tab-inventaire" style="display:none" onclick="showTab('inventaire')">📦 Inventaire</button>
-    <button class="nav-tab" id="nav-tab-reappro" style="display:none" onclick="showTab('reappro')">🔄 Réappro</button>
-    <button class="nav-tab" id="nav-tab-chantiers" style="display:none" onclick="showTab('chantiers')">🏗️ Chantiers</button>
-    <button class="nav-tab" id="nav-tab-couts" style="display:none" onclick="showTab('couts')">💶 Coûts</button>
+    <button class="nav-tab active" data-nav="catalogue" onclick="showTab('catalogue')">&#128230; Catalogue</button>
+    <button class="nav-tab" data-nav="orders" onclick="showTab('orders')">&#128203; Commandes <span id="ordersBadge" style="display:none;background:var(--orange);color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;"></span><span id="retoursNavBadge" title="Bons de retour à traiter" style="display:none;background:#e67e22;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;margin-left:4px;">↩️ 0</span></button>
+    <button class="nav-tab" id="nav-g-suivi" data-nav="g:suivi" style="display:none" onclick="navGo('suivi')"></button>
+    <button class="nav-tab" id="nav-g-stock" data-nav="g:stock" style="display:none" onclick="navGo('stock')"></button>
+    <button class="nav-tab" id="nav-g-reglages" data-nav="g:reglages" style="display:none" onclick="navGo('reglages')"></button>
   </div>
   <div class="main">
     <div id="tabCatalogue">
@@ -533,16 +532,11 @@ const db = firebase.firestore();
   </div><!-- fin .main -->
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
-      <button class="bnav-btn active" id="bnav-catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
-      <button class="bnav-btn" id="bnav-orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
-      <button class="bnav-btn" id="bnav-users" style="display:none" onclick="showTab('users');setBnav('users')"><span class="bnav-icon">&#128100;</span>Utilisateurs</button>
-      <button class="bnav-btn" id="bnav-suivi" style="display:none" onclick="showTab('suivi');setBnav('suivi')"><span class="bnav-icon">&#128205;</span>Suivi</button>
-      <button class="bnav-btn" id="bnav-stats" style="display:none" onclick="showTab('stats');setBnav('stats')"><span class="bnav-icon">&#128202;</span>Stats</button>
-      <button class="bnav-btn" id="bnav-corbeille" style="display:none" onclick="showTab('corbeille');setBnav('corbeille')"><span class="bnav-icon">🗑️</span>Corbeille</button>
-      <button class="bnav-btn" id="bnav-inventaire" style="display:none" onclick="showTab('inventaire');setBnav('inventaire')"><span class="bnav-icon">📦</span>Stock</button>
-      <button class="bnav-btn" id="bnav-reappro" style="display:none" onclick="showTab('reappro');setBnav('reappro')"><span class="bnav-icon">🔄</span>Réappro</button>
-      <button class="bnav-btn" id="bnav-chantiers" style="display:none" onclick="showTab('chantiers');setBnav('chantiers')"><span class="bnav-icon">🏗️</span>Chantiers</button>
-      <button class="bnav-btn" id="bnav-couts" style="display:none" onclick="showTab('couts');setBnav('couts')"><span class="bnav-icon">💶</span>Coûts</button>
+      <button class="bnav-btn active" id="bnav-catalogue" data-nav="catalogue" onclick="showTab('catalogue');setBnav('catalogue')"><span class="bnav-icon">&#128230;</span>Catalogue</button>
+      <button class="bnav-btn" id="bnav-orders" data-nav="orders" onclick="showTab('orders');setBnav('orders')" style="position:relative"><span class="bnav-icon">&#128203;</span>Commandes<span id="bnavOrdersBadge" style="display:none;position:absolute;top:4px;right:calc(50% - 22px);background:var(--red);color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span><span id="bnavRetoursBadge" style="display:none;position:absolute;top:4px;left:calc(50% - 22px);background:#e67e22;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;padding:0 3px;"></span></button>
+      <button class="bnav-btn" id="bnav-g-suivi" data-nav="g:suivi" style="display:none" onclick="navGo('suivi')"></button>
+      <button class="bnav-btn" id="bnav-g-stock" data-nav="g:stock" style="display:none" onclick="navGo('stock')"></button>
+      <button class="bnav-btn" id="bnav-g-reglages" data-nav="g:reglages" style="display:none" onclick="navGo('reglages')"></button>
       <button class="bnav-btn" onclick="openCart()" style="position:relative"><span class="bnav-icon">&#128722;</span>Panier<span id="bnavCartCount" style="display:none;position:absolute;top:4px;right:calc(50% - 18px);background:var(--orange);color:#fff;border-radius:50%;width:18px;height:18px;font-size:0.65rem;font-weight:800;align-items:center;justify-content:center;"></span></button>
     </div>
   </div>
@@ -5114,6 +5108,7 @@ function startSession(u){
   perms.users     ? show('nav-tab-users')      : hide('nav-tab-users');
   perms.chantiers ? show('nav-tab-chantiers')  : hide('nav-tab-chantiers');
   perms.couts     ? show('nav-tab-couts')      : hide('nav-tab-couts');
+  navApply(perms);   // regroupe ces entrées en 5 : Catalogue, Commandes, Suivi, Stock, Réglages
 
   // Date filter bar (stats)
   document.getElementById('dateFilterBar').style.display=perms.stats?'flex':'none';
@@ -6288,6 +6283,44 @@ function reorderOrder(id){
   showToast('🔁 '+added+' référence(s) de '+id+' remise(s) dans le panier'+(skipped.length?' — '+skipped.length+' indisponible(s) : '+skipped.slice(0,3).join(', ')+(skipped.length>3?'…':''):''));
   openCart();
 }
+// ===== NAVIGATION RANGÉE : 5 entrées (Catalogue, Commandes, Suivi, Stock, Réglages), chacune avec son petit menu =====
+const NAV_GROUPS={
+  suivi:{ico:'📍',txt:'Suivi',items:[{tab:'suivi',perm:'suivi',ico:'📍',txt:'Suivi',sub:'📍 Par chantier'},{tab:'couts',perm:'couts',ico:'💶',txt:'Coûts',sub:'💶 Coûts'},{tab:'stats',perm:'stats',ico:'📊',txt:'Statistiques',sub:'📊 Statistiques'}]},
+  stock:{ico:'📦',txt:'Stock',items:[{tab:'inventaire',perm:'inventaire',ico:'📦',txt:'Inventaire',sub:'📦 Inventaire'},{tab:'reappro',perm:'reappro',ico:'🔄',txt:'Réappro',sub:'🔄 Réappro'},{tab:'bilan',panel:true,perm:'inventaire',admin:true,ico:'📈',txt:'Bilan du stock',sub:'📈 Bilan & articles'}]},
+  reglages:{ico:'⚙️',txt:'Réglages',items:[{tab:'users',perm:'users',ico:'👤',txt:'Utilisateurs',sub:'👤 Utilisateurs'},{tab:'chantiers',perm:'chantiers',ico:'🏗️',txt:'Chantiers',sub:'🏗️ Chantiers'},{tab:'corbeille',perm:'corbeille',ico:'🗑️',txt:'Corbeille',sub:'🗑️ Corbeille'}]}
+};
+let navPerms={}, navCur='catalogue';
+function navGroupOf(tab){ return Object.keys(NAV_GROUPS).find(function(g){return NAV_GROUPS[g].items.some(function(i){return i.tab===tab;});})||null; }
+function navAllowed(g){ return NAV_GROUPS[g].items.filter(function(i){return navPerms[i.perm]&&(!i.admin||currentRole==='admin');}); }
+function navApply(perms){
+  navPerms=perms||{};
+  Object.keys(NAV_GROUPS).forEach(function(g){
+    const its=navAllowed(g), single=its.length===1, G=NAV_GROUPS[g];
+    const ico=single?its[0].ico:G.ico, txt=single?its[0].txt:G.txt;
+    const top=document.getElementById('nav-g-'+g), bot=document.getElementById('bnav-g-'+g);
+    if(top){ top.style.display=its.length?'':'none'; top.innerHTML=ico+' '+txt; }
+    if(bot){ bot.style.display=its.length?'':'none'; bot.innerHTML='<span class="bnav-icon">'+ico+'</span>'+txt; }
+  });
+  navHighlight(navCur);
+}
+function navGo(g){
+  const its=navAllowed(g); if(!its.length) return;
+  if(navGroupOf(navCur)===g) return;   // déjà dans ce groupe : on reste sur la page courante
+  const it=its[0]; if(it.panel) artOpen(); else showTab(it.tab);
+}
+function navHighlight(tab){
+  const g=navGroupOf(tab), key=g?'g:'+g:tab;
+  document.querySelectorAll('.nav-tab[data-nav]').forEach(function(b){ b.classList.toggle('active',b.dataset.nav===key); });
+  document.querySelectorAll('.bnav-btn[data-nav]').forEach(function(b){ b.classList.toggle('active',b.dataset.nav===key); });
+}
+// petit menu en haut de la page quand le groupe a plusieurs pages
+function navSubRender(tab){
+  document.querySelectorAll('.subnav').forEach(function(e){e.remove();});
+  const g=navGroupOf(tab); if(!g) return;
+  const its=navAllowed(g); if(its.length<2) return;
+  const c=document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)); if(!c) return;
+  c.insertAdjacentHTML('afterbegin','<div class="subnav">'+its.map(function(it){ return '<button class="'+(it.tab===tab?'on':'')+'" onclick="'+(it.panel?'artOpen()':'showTab(\''+it.tab+'\')')+'">'+it.sub+'</button>'; }).join('')+'</div>');
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -6299,8 +6332,7 @@ function showTab(tab){
   document.getElementById('tabReappro').style.display=tab==='reappro'?'block':'none';
   document.getElementById('tabChantiers').style.display=tab==='chantiers'?'block':'none';
   document.getElementById('tabCouts').style.display=tab==='couts'?'block':'none';
-  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',
-    (i===0&&tab==='catalogue')||(i===1&&tab==='orders')||(i===2&&tab==='users')||(i===3&&tab==='suivi')||(i===4&&tab==='stats')||(i===5&&tab==='corbeille')));
+  navCur=tab; navHighlight(tab); navSubRender(tab);
   if(tab==='orders') renderOrders();
   if(tab==='users'){renderUsers();renderChantiers();}
   if(tab==='suivi') renderSuivi();
@@ -6311,10 +6343,7 @@ function showTab(tab){
   if(tab==='chantiers') renderChantiersTab();
   if(tab==='couts') costEnsure().then(renderCostSection);
 }
-function setBnav(tab){
-  document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
-  const el=document.getElementById('bnav-'+tab);if(el)el.classList.add('active');
-}
+function setBnav(tab){ navHighlight(tab); }
 const CATS=['Toutes',...new Set(CATALOGUE.map(p=>p.cat))];
 // ===== CATÉGORIE « ATELIER DLM » du catalogue : visible uniquement pour les utilisateurs choisis par l'admin (case « ATELIER DLM ») =====
 const DLM_CAT='ATELIER DLM';
@@ -8672,7 +8701,6 @@ function renderInventaire(){
       </div>
       <button onclick="exportStockExcel()" style="padding:8px 14px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📥 Export stock</button>
       <button onclick="openMvtModal()" style="padding:8px 14px;background:#34495e;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📜 Journal du stock</button>
-      <button onclick="artOpen()" style="padding:8px 14px;background:#16a085;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">📦 Gestion du stock</button>
       ${currentRole==='admin'?`
       <label style="padding:8px 14px;background:#e67e22;color:#fff;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;">
         🔄 Synchroniser depuis Excel
