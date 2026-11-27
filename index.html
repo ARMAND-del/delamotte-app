@@ -6575,6 +6575,12 @@ function totauxFor(){
   return (d.users||{})[currentUser]||0;
 }
 function totauxCard(){ const n=totauxFor(); return n===null?'':'<div class="stat-card"><div class="stat-num" style="color:#8e44ad">'+n+'</div><div class="stat-label">Total depuis le début</div></div>'; }
+// notification sur le téléphone de l'admin (service gratuit ntfy.sh, sans serveur ni Firebase) : arrive même appli fermée
+const PUSH_TOPIC='delamotte-c84dd21f57263fe278f4';
+function pushPhone(title,msg){
+  try{ fetch('https://ntfy.sh/'+PUSH_TOPIC+'?title='+encodeURIComponent(title)+'&priority=high&tags=package',{method:'POST',body:String(msg||''),mode:'no-cors',keepalive:true}).catch(function(){}); }catch(e){}
+}
+function pushTest(){ pushPhone('✅ Test DELAMOTTE','Si tu vois ce message, les notifications téléphone fonctionnent.'); showToast('📲 Message de test envoyé : regarde ton téléphone dans quelques secondes'); }
 function closeInfoModal(){ document.getElementById('infoModal').style.display='none'; }
 function infoModalOpen(title,html){ document.getElementById('infoTitle').textContent=title; document.getElementById('infoBody').innerHTML=html; document.getElementById('infoModal').style.display='flex'; }
 // lectures par utilisateur : chaque téléphone envoie son compteur (admin seul le consulte)
@@ -7115,7 +7121,7 @@ function submitOrder(p){
     }catch(e){ step=Promise.reject(e); }
     return step.catch(function(e){ if(!hard(e)) throw e; return legacy(); })
       .catch(function(e){ if(e&&e.code==='resource-exhausted') return writeOnly(); throw e; })   // quota de LECTURES atteint : on enregistre quand même, sans rien lire
-      .then(function(r){ if(!r.dup){ orderEmail(r.id,p); totauxAdd(p.user,p.service,1); } return r.id; });
+      .then(function(r){ if(!r.dup){ orderEmail(r.id,p); totauxAdd(p.user,p.service,1); pushPhone('📦 Nouvelle commande '+r.id,(p.chef||p.user)+' — '+p.chantier+' ('+p.items.reduce(function(t,i){return t+(i.qty||0);},0)+' art.)'); } return r.id; });
   };
   // 4) enregistrement sans aucune lecture (quota de lectures épuisé) : numéro provisoire tiré de l'identifiant unique de la commande, sans compteur ; réessayer ne crée jamais de doublon
   const writeOnly=function(){
@@ -8166,7 +8172,7 @@ function renderDashboard(){
   const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">📦 Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>`+totauxCard()+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+'<div class="stat-card" onclick="openLectures()" style="cursor:pointer" title="'+readDetail().replace(/"/g,'')+'"><div class="stat-num" style="color:'+(readTotal()>20000?'var(--red)':readTotal()>8000?'var(--orange)':'var(--green)')+'">'+readTotal().toLocaleString('fr-FR')+'</div><div class="stat-label">📊 Lectures Firebase aujourd\'hui<br><span style="font-size:0.66rem">(cet appareil — limite 50 000 pour tous)<br>👥 voir par utilisateur</span></div></div>';
+    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>`+totauxCard()+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+'<div class="stat-card" onclick="openLectures()" style="cursor:pointer" title="'+readDetail().replace(/"/g,'')+'"><div class="stat-num" style="color:'+(readTotal()>20000?'var(--red)':readTotal()>8000?'var(--orange)':'var(--green)')+'">'+readTotal().toLocaleString('fr-FR')+'</div><div class="stat-label">📊 Lectures Firebase aujourd\'hui<br><span style="font-size:0.66rem">(cet appareil — limite 50 000 pour tous)<br>👥 voir par utilisateur</span></div></div>'+'<div style="flex-basis:100%;grid-column:1/-1;text-align:right"><button class="btn-print" style="background:#27ae60;padding:5px 12px;font-size:0.75rem" onclick="pushTest()">📲 Tester la notification téléphone</button></div>';
 }
 
 function clearDateFilter(){
