@@ -696,6 +696,16 @@ const db = firebase.firestore();
     <button onclick="mvtExport()" style="margin-top:10px;padding:10px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;cursor:pointer;">📥 Exporter ce journal (Excel)</button>
   </div>
 </div>
+<!-- FENETRE INFO (classement / lectures) -->
+<div id="infoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:316;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
+  <div style="background:var(--white);border-radius:16px;padding:18px;width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 id="infoTitle" style="font-size:1rem;"></h3>
+      <button onclick="closeInfoModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--muted);">✕</button>
+    </div>
+    <div id="infoBody" style="overflow-y:auto;flex:1;min-height:100px;"></div>
+  </div>
+</div>
 <!-- ALERTES STOCK BAS -->
 <div id="alertModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:315;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;">
   <div style="background:var(--white);border-radius:16px;padding:18px;width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);box-sizing:border-box;">
@@ -5014,7 +5024,7 @@ function getEffectiveName(code, originalNom){
 }
 
 function listenCustomNames(){
-  db.collection('custom_names').onSnapshot(snap=>{
+  db.collection('custom_names').onSnapshot(snap=>{ readCount('noms',snap.docChanges?snap.docChanges().length:snap.docs.length);
     customNamesCache={};
     snap.docs.forEach(d=>{
       customNamesCache[d.id]=d.data().nom;
@@ -5054,7 +5064,7 @@ let customRefsCache=[]; // [{code,nom,cat}]
 let customNamesCache={}; // code -> nom personnalisé
 
 function listenCustomRefs(){
-  db.collection('custom_refs').onSnapshot(snap=>{
+  db.collection('custom_refs').onSnapshot(snap=>{ readCount('refs',snap.docChanges?snap.docChanges().length:snap.docs.length);
     customRefsCache=[];
     customImagesCache={};
     snap.docs.forEach(d=>{
@@ -5165,7 +5175,7 @@ function saveExtraUsers(u){localStorage.setItem('delamotte_extra_users',JSON.str
 function getAllUsers(){return Object.assign({},USERS,getExtraUsers());}
 
 function listenUsers(){
-  db.collection('users').onSnapshot(snap=>{
+  db.collection('users').onSnapshot(snap=>{ readCount('users',snap.docChanges?snap.docChanges().length:snap.docs.length);
     const extra={};
     snap.docs.forEach(d=>{extra[d.id]=d.data();});
     saveExtraUsers(extra);
@@ -5376,12 +5386,12 @@ function applyChantiers(list){
 }
 // la liste des chantiers est lue en UNE seule ligne (config/chantiers_all), mise à jour à chaque ajout / modification / suppression
 function listenChantiers(){
-  db.collection('config').doc('chantiers_all').onSnapshot(doc=>{
+  db.collection('config').doc('chantiers_all').onSnapshot(doc=>{ readCount('chantiers',1);
     if(doc.exists){
       if(chantiersLegacyUnsub){chantiersLegacyUnsub();chantiersLegacyUnsub=null;}
       applyChantiers(doc.data().list||[]);
     }else if(!chantiersLegacyUnsub){   // tant que la ligne regroupée n'existe pas (avant le premier passage de l'admin) : ancienne lecture
-      chantiersLegacyUnsub=db.collection('chantiers').orderBy('name').onSnapshot(snap=>applyChantiers(snap.docs.map(d=>d.data())));
+      chantiersLegacyUnsub=db.collection('chantiers').orderBy('name').onSnapshot(snap=>{ readCount('chantiers',snap.docChanges?snap.docChanges().length:snap.docs.length); applyChantiers(snap.docs.map(d=>d.data())); });
     }
   });
 }
@@ -6520,6 +6530,38 @@ function totauxFor(){
   return (d.users||{})[currentUser]||0;
 }
 function totauxCard(){ const n=totauxFor(); return n===null?'':'<div class="stat-card"><div class="stat-num" style="color:#8e44ad">'+n+'</div><div class="stat-label">Total depuis le début</div></div>'; }
+function closeInfoModal(){ document.getElementById('infoModal').style.display='none'; }
+function infoModalOpen(title,html){ document.getElementById('infoTitle').textContent=title; document.getElementById('infoBody').innerHTML=html; document.getElementById('infoModal').style.display='flex'; }
+// lectures par utilisateur : chaque téléphone envoie son compteur (admin seul le consulte)
+let lecLast=-1, lecAt=0;
+function lecDev(){ try{ let d=localStorage.getItem('delamotte_dev'); if(!d){ d=Math.random().toString(36).slice(2,6); localStorage.setItem('delamotte_dev',d); } return d; }catch(e){ return 'x'; } }
+function lecturesPush(force){
+  try{
+    if(!currentUser||typeof db==='undefined'||!db||quotaPaused()||!navigator.onLine) return;
+    const n=readTotal(); if(n===lecLast) return;
+    if(!force&&Date.now()-lecAt<600000) return;
+    lecLast=n; lecAt=Date.now();
+    const e={}, o={}; e[currentUser+'·'+lecDev()]={u:currentUser,n:n,d:new Date().toISOString().slice(0,10),at:new Date().toISOString()}; o.dev=e;
+    db.collection('meta').doc('lectures').set(o,{merge:true}).catch(function(){});
+  }catch(e){}
+}
+setInterval(function(){ lecturesPush(false); },600000);
+document.addEventListener('visibilitychange',function(){ if(document.hidden) lecturesPush(true); });
+function openLectures(){
+  if(currentRole!=='admin') return;
+  infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="color:var(--muted);text-align:center;padding:24px">Chargement…</p>');
+  lecturesPush(true);
+  db.collection('meta').doc('lectures').get().then(function(s){
+    readCount('lectures',1);
+    const today=new Date().toISOString().slice(0,10), dev=(s.exists&&s.data().dev)||{}, by={};
+    Object.keys(dev).forEach(function(k){ const x=dev[k]; if(x&&x.d===today){ by[x.u]=by[x.u]||{n:0,at:''}; by[x.u].n+=x.n||0; if((x.at||'')>by[x.u].at) by[x.u].at=x.at; } });
+    const rows=Object.keys(by).sort(function(a,b){return by[b].n-by[a].n;});
+    if(!rows.length){ infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="color:var(--muted);text-align:center;padding:24px">Aucun téléphone n\'a encore envoyé son compteur aujourd\'hui (il faut la nouvelle version ouverte quelques minutes).</p>'); return; }
+    const max=by[rows[0]].n||1, tot=rows.reduce(function(t,k){return t+by[k].n;},0);
+    infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Aujourd\'hui · '+tot.toLocaleString('fr-FR')+' lectures au total sur '+rows.length+' utilisateurs · limite 50 000 pour tous. Le compteur est envoyé toutes les 10 min ou quand l\'appli passe en arrière-plan.</p>'
+     +rows.map(function(k){ const v=by[k]; return '<div class="stats-bar-item"><div class="stats-bar-label" style="flex:1">'+editEsc(k)+'</div><div class="stats-bar-track" style="flex:1"><div class="stats-bar-fill" style="width:'+Math.round(v.n/max*100)+'%;background:'+(v.n>8000?'var(--red)':v.n>3000?'var(--orange)':'var(--green)')+'"></div></div><div class="stats-bar-val" style="min-width:64px">'+v.n.toLocaleString('fr-FR')+'</div></div>'; }).join('')+'<p style="font-size:0.74rem;color:var(--muted);margin-top:12px"><b>Détail de cet appareil (aujourd\'hui) :</b><br>'+(readDetail()||'—')+'</p>');
+  }).catch(function(){ infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="color:var(--muted);text-align:center;padding:24px">Impossible de lire pour le moment (quota atteint ou règles Firebase).</p>'); });
+}
 // mise à jour d'un compteur (hors de la commande elle-même : une commande n'échoue jamais à cause des totaux)
 function totauxAdd(user,svc,n){
   try{
@@ -8070,7 +8112,7 @@ function renderDashboard(){
   const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">📦 Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>`+totauxCard()+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+'<div class="stat-card" title="'+readDetail().replace(/"/g,'')+'"><div class="stat-num" style="color:'+(readTotal()>20000?'var(--red)':readTotal()>8000?'var(--orange)':'var(--green)')+'">'+readTotal().toLocaleString('fr-FR')+'</div><div class="stat-label">📊 Lectures Firebase aujourd\'hui<br><span style="font-size:0.66rem">(cet appareil — limite 50 000 pour tous)</span></div></div>';
+    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>`+totauxCard()+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+'<div class="stat-card" onclick="openLectures()" style="cursor:pointer" title="'+readDetail().replace(/"/g,'')+'"><div class="stat-num" style="color:'+(readTotal()>20000?'var(--red)':readTotal()>8000?'var(--orange)':'var(--green)')+'">'+readTotal().toLocaleString('fr-FR')+'</div><div class="stat-label">📊 Lectures Firebase aujourd\'hui<br><span style="font-size:0.66rem">(cet appareil — limite 50 000 pour tous)<br>👥 voir par utilisateur</span></div></div>';
 }
 
 function clearDateFilter(){
@@ -8252,7 +8294,7 @@ let pendingReceptionFourn=null;
 // En commande cache (Firebase synced)
 let reapproCommandeCache={};
 function listenReapproCommande(){
-  db.collection('reappro_commande').onSnapshot(snap=>{
+  db.collection('reappro_commande').onSnapshot(snap=>{ readCount('reappro_cmd',snap.docChanges?snap.docChanges().length:snap.docs.length);
     reapproCommandeCache={};
     snap.docs.forEach(d=>{reapproCommandeCache[d.id]=d.data();});
     if(document.getElementById('tabReappro').style.display!=='none') renderReappro();
@@ -8905,7 +8947,7 @@ function openCommentModal(orderId){
   cmtMarkRead(orderId); cmtRefresh();
   if(commentListener) commentListener();
   commentListener=db.collection('orders').doc(orderId).collection('comments')
-    .orderBy('createdAt','asc').onSnapshot(snap=>{
+    .orderBy('createdAt','asc').onSnapshot(snap=>{ readCount('messages',snap.docChanges?snap.docChanges().length:snap.docs.length);
       const el=document.getElementById('commentsList');
       if(!snap.docs.length){el.innerHTML='<p style="color:var(--muted);font-size:0.85rem;text-align:center;padding:10px">Aucun commentaire</p>';return;}
       el.innerHTML=snap.docs.map(d=>{
@@ -9064,7 +9106,7 @@ function ensureStockDoc(){
 }
 function listenStock(){
   if(stockListener) stockListener();
-  stockListener=STOCK_DOC().onSnapshot(doc=>{
+  stockListener=STOCK_DOC().onSnapshot(doc=>{ readCount('stock',1);
     stockCache={}; stockCacheP={}; stockTrkG={}; stockTrkP={};
     const items=doc.exists?(doc.data().items||{}):{};
     Object.keys(items).forEach(code=>{const x=items[code]; stockCache[code]=x.qty||0; stockCacheP[code]=x.qtyP||0; if(x.qty!==undefined) stockTrkG[code]=1; if(x.qtyP!==undefined) stockTrkP[code]=1;});
@@ -10056,7 +10098,7 @@ if('serviceWorker' in navigator){
 let reapproStockCache={};
 
 function listenReapproStock(){
-  db.collection('reappro_stock').onSnapshot(snap=>{
+  db.collection('reappro_stock').onSnapshot(snap=>{ readCount('reappro_stock',snap.docChanges?snap.docChanges().length:snap.docs.length);
     reapproStockCache={};
     snap.docs.forEach(d=>{reapproStockCache[d.id]=d.data();});
     if(document.getElementById('tabReappro')&&document.getElementById('tabReappro').style.display!=='none') renderReappro();
