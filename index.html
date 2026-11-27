@@ -5023,14 +5023,39 @@ function getEffectiveName(code, originalNom){
   return customNamesCache[code] || originalNom;
 }
 
+// désignations personnalisées : UN seul document (config/noms_all) lu en direct = 1 lecture par ouverture (avant : une lecture par désignation, ~2 300)
+let namesUnsub=null, namesLegacyUnsub=null, namesDocReady=false, namesPublished=false;
+function namesApply(map){ customNamesCache={}; Object.keys(map||{}).forEach(function(k){ customNamesCache[k]=map[k]; }); filterProducts(); }
+function namesLegacyStart(){
+  if(namesLegacyUnsub) return;
+  namesLegacyUnsub=db.collection('custom_names').onSnapshot(snap=>{ readCount('noms',snap.docChanges?snap.docChanges().length:snap.docs.length);
+    if(namesDocReady) return;
+    const m={}; snap.docs.forEach(d=>{ m[d.id]=d.data().nom; }); namesApply(m);
+    // première fois : l'admin regroupe toutes les désignations dans le document unique
+    if(currentRole==='admin'&&!namesPublished&&!quotaPaused()){ namesPublished=true; db.collection('config').doc('noms_all').set({names:m,at:new Date().toISOString()}).catch(function(){ namesPublished=false; }); }
+  },function(err){ if(err&&err.code==='resource-exhausted') quotaPauseSet(); });
+}
 function listenCustomNames(){
-  db.collection('custom_names').onSnapshot(snap=>{ readCount('noms',snap.docChanges?snap.docChanges().length:snap.docs.length);
-    customNamesCache={};
-    snap.docs.forEach(d=>{
-      customNamesCache[d.id]=d.data().nom;
-    });
-    filterProducts();
-  });
+  if(namesUnsub){ try{namesUnsub();}catch(e){} namesUnsub=null; }
+  if(namesLegacyUnsub){ try{namesLegacyUnsub();}catch(e){} namesLegacyUnsub=null; }
+  namesDocReady=false; namesPublished=false;
+  namesUnsub=db.collection('config').doc('noms_all').onSnapshot(function(doc){
+    readCount('noms',1);
+    if(doc.exists){
+      namesDocReady=true;
+      if(namesLegacyUnsub){ try{namesLegacyUnsub();}catch(e){} namesLegacyUnsub=null; }
+      namesApply((doc.data()||{}).names||{});
+    } else namesLegacyStart();
+  },function(err){ if(err&&err.code==='resource-exhausted') quotaPauseSet(); else namesLegacyStart(); });
+}
+// tient le document unique à jour à chaque modification (seulement s'il existe déjà : sinon l'ancienne liste fait foi)
+function namesDocPatch(patch){
+  if(!namesDocReady||!patch||!Object.keys(patch).length) return;
+  try{
+    const FV=firebase.firestore.FieldValue, p={};
+    Object.keys(patch).forEach(function(k){ p[k]=patch[k]===null?FV.delete():patch[k]; });
+    db.collection('config').doc('noms_all').set({names:p,at:new Date().toISOString()},{merge:true}).catch(function(){});
+  }catch(e){}
 }
 
 function openEditNomModal(code, currentNom){
@@ -5044,7 +5069,7 @@ function openEditNomModal(code, currentNom){
   filterProducts();
   // Sauvegarde Firebase (tous les appareils verront le nouveau nom)
   db.collection('custom_names').doc(code).set({nom,updatedAt:new Date().toISOString()})
-    .then(()=>showToast('✅ Désignation enregistrée'))
+    .then(()=>{ const q={}; q[code]=nom; namesDocPatch(q); showToast('✅ Désignation enregistrée'); })
     .catch(e=>{
       if(prev===undefined) delete customNamesCache[code]; else customNamesCache[code]=prev;
       filterProducts();
@@ -5055,7 +5080,7 @@ function openEditNomModal(code, currentNom){
 function resetNom(code){
   if(!confirm('Remettre la désignation originale ?')) return;
   db.collection('custom_names').doc(code).delete()
-    .then(()=>showToast('✅ Désignation réinitialisée'))
+    .then(()=>{ const q={}; q[code]=null; namesDocPatch(q); showToast('✅ Désignation réinitialisée'); })
     .catch(()=>showToast('Erreur'));
 }
 
@@ -5869,7 +5894,8 @@ function excelSyncApply(){
   const D=S.diff, now=new Date().toISOString();
   const on=function(id){const e=document.getElementById('xs_'+id);return !!e&&e.checked;};
   const ops=[], refsPatch={}, empPatch={}, n={};
-  if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
+  const namesP={};
+  if(on('noms')){ n.noms=D.noms.length; D.noms.forEach(function(x){ namesP[x.code]=x.revert?null:x.nom; }); D.noms.forEach(function(x){ops.push(function(b){ if(x.revert) b.delete(db.collection('custom_names').doc(x.code)); else b.set(db.collection('custom_names').doc(x.code),{nom:x.nom,updatedAt:now,source:'excel'}); });}); }
   const stockItems={};   // tous les changements de stock dans UNE seule écriture
   if(on('stockG')){ n.stockG=D.stockG.length; D.stockG.forEach(function(x){stockItems[x.code]={qty:x.qty,qtyP:0};}); }   // un seul stock : l'ancien stock « particulier » est remis à 0
   if(on('stockP')){ n.stockP=D.stockP.length; D.stockP.forEach(function(x){(stockItems[x.code]=stockItems[x.code]||{}).qtyP=x.qty;}); }
@@ -5892,6 +5918,7 @@ function excelSyncApply(){
   const chunks=[]; for(let i=0;i<ops.length;i+=400) chunks.push(ops.slice(i,i+400));
   let p=Promise.resolve();
   chunks.forEach(function(ch,idx){ p=p.then(function(){ if(chunks.length>1) showToast('Enregistrement '+(idx+1)+'/'+chunks.length+'...'); const b=db.batch(); ch.forEach(function(f){f(b);}); return b.commit(); }); });
+  if(Object.keys(namesP).length) p=p.then(function(){ namesDocPatch(namesP); });
   if(Object.keys(refsPatch).length) p=p.then(function(){return db.collection('config').doc('refs_fourn').set(Object.assign({_updatedAt:now},refsPatch),{merge:true});}).then(function(){Object.keys(refsPatch).forEach(function(c){REFS_FOURN[c]=refsPatch[c];});}).then(function(){return prixLog(priceLog,'sync');});
   if(Object.keys(empPatch).length) p=p.then(function(){return db.collection('config').doc('emplacements').set(Object.assign({_updatedAt:now},empPatch),{merge:true});}).then(function(){Object.assign(EMPLACEMENTS,empPatch);});
   p.then(function(){
@@ -9938,7 +9965,7 @@ function importRefsFourn(event){
         });
         batch.commit().then(function(){saveBatchNoms(entries,i+400);}).catch(function(e){console.log('Erreur maj noms',e);});
       }
-      if(changed.length>0) saveBatchNoms(changed,0);
+      if(changed.length>0){ const np={}; changed.forEach(function(e){ np[e[0]]=e[1].nom; }); namesDocPatch(np); saveBatchNoms(changed,0); }
       filterProducts();
       // Start with all articles from reference sheet
       const updates={};
