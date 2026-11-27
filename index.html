@@ -32,6 +32,8 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+// copie locale de Firestore : à la réouverture (moins de 30 min), seules les lignes modifiées sont facturées au lieu de toute la liste
+try{ if(db.enablePersistence) db.enablePersistence({synchronizeTabs:true}).catch(function(){}); }catch(e){}
 </script>
 <style>
   :root{--blue:#0077b6;--blue-dark:#005f8e;--blue-light:#e8f4fd;--orange:#f77f00;--gray:#f4f6f8;--border:#dde3ea;--text:#1a2332;--muted:#6b7a8d;--white:#fff;--green:#27ae60;--red:#e74c3c;}
@@ -7095,11 +7097,19 @@ function submitOrder(p){
       });
     }catch(e){ step=Promise.reject(e); }
     return step.catch(function(e){ if(!hard(e)) throw e; return legacy(); })
+      .catch(function(e){ if(e&&e.code==='resource-exhausted') return writeOnly(); throw e; })   // quota de LECTURES atteint : on enregistre quand même, sans rien lire
       .then(function(r){ if(!r.dup){ orderEmail(r.id,p); totauxAdd(p.user,p.service,1); } return r.id; });
+  };
+  // 4) enregistrement sans aucune lecture (quota de lectures épuisé) : numéro provisoire tiré de l'identifiant unique de la commande, sans compteur ; réessayer ne crée jamais de doublon
+  const writeOnly=function(){
+    const id='CMD-T'+String(p.cid).replace(/[^a-z0-9]/gi,'').slice(1,9).toUpperCase(), batch=db.batch();
+    batch.set(db.collection('orders').doc(id),build(id)); batch.set(kref,{id:id,at:new Date().toISOString(),prov:true});
+    return batch.commit().then(function(){ return {id:id,dup:false}; });
   };
   if(!p.queued) return create();
   // file d'attente : vérification supplémentaire pour les commandes créées avant l'introduction du ticket
-  return db.collection('orders').where('cid','==',p.cid).limit(1).get().then(q=>q.empty?create():q.docs[0].id);
+  return db.collection('orders').where('cid','==',p.cid).limit(1).get().then(q=>q.empty?create():q.docs[0].id)
+    .catch(function(e){ if(e&&e.code==='resource-exhausted') return create(); throw e; });
 }
 
 function sendOrder(){
@@ -10114,11 +10124,8 @@ if('serviceWorker' in navigator){
         });
       });
     }).catch(()=>{});
-    // Reload page when new service worker takes control
-    let refreshing=false;
-    navigator.serviceWorker.addEventListener('controllerchange',()=>{
-      if(!refreshing){refreshing=true;window.location.reload();}
-    });
+    // Nouvelle version : elle sera utilisée à la prochaine ouverture de l'appli (plus de rechargement forcé : chaque rechargement relisait toutes les données)
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{ window.__newVersionReady=true; });
   });
 }
 
