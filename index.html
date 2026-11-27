@@ -5029,6 +5029,7 @@ function getEffectiveName(code, originalNom){
 let namesUnsub=null, namesLegacyUnsub=null, namesDocReady=false, namesPublished=false;
 function namesApply(map){ customNamesCache={}; Object.keys(map||{}).forEach(function(k){ customNamesCache[k]=map[k]; }); filterProducts(); }
 function namesLegacyStart(){
+  if(currentRole!=='admin') return;   // avant le regroupement, seul l'admin lit l'ancienne liste (sinon tous les téléphones la relisent d'un coup au moment de la mise en ligne)
   if(namesLegacyUnsub) return;
   namesLegacyUnsub=db.collection('custom_names').onSnapshot(snap=>{ readCount('noms',snap.docChanges?snap.docChanges().length:snap.docs.length);
     if(namesDocReady) return;
@@ -6531,16 +6532,31 @@ function ensureAllOrdersRun(force,silent){
   });
 }
 
+let sliceRestoredFlag=false, sliceTop=null;
+function sliceKey(){ return 'slice_'+histKey(); }
+// tranches déjà lues (page Coûts…) : mémorisées 12 h sur l'appareil ; on ne relit que les commandes arrivées depuis
+function sliceRestore(){
+  return idbGet(sliceKey()).then(function(c){
+    const top=ordersLoadedFrom;
+    if(!c||!c.list||!c.from||!c.upto||Date.now()-c.ts>=12*3600*1000||c.from>=top||ordersOlder.length) return;
+    const finish=function(extra){ const ids={}, list=c.list.slice(); list.forEach(function(o){ids[o.id]=1;}); (extra||[]).forEach(function(o){ if(!ids[o.id]) list.push(o); }); ordersOlder=list; ordersLoadedFrom=c.from; sliceTop=top; ordersMerge(); };
+    if(c.upto>=top){ finish(); return; }
+    return db.collection('orders').where('createdAt','>=',c.upto).where('createdAt','<',top).get().then(function(snap){ readCount('tranche',snap.docs.length); finish(snap.docs.map(function(d){return d.data();})); }).catch(function(){});
+  }).catch(function(){});
+}
 function ensureOrdersSince(iso){
   if(histP) return histP;
   if(sliceP) return sliceP.then(function(){ return ensureOrdersSince(iso); });
-  if(ownDataOnly()||ordersAllLoaded||!ordersLoadedFrom||iso>=ordersLoadedFrom||quotaPaused()) return Promise.resolve();
+  if(ownDataOnly()||ordersAllLoaded||!ordersLoadedFrom||quotaPaused()) return Promise.resolve();
+  if(!sliceRestoredFlag){ sliceRestoredFlag=true; return sliceRestore().then(function(){ return ensureOrdersSince(iso); }); }
+  if(iso>=ordersLoadedFrom) return Promise.resolve();
   if(!heavyGuard('Cette période','plusieurs dizaines à centaines')) return Promise.resolve();
-  const upto=ordersLoadedFrom;
+  const upto=ordersLoadedFrom; if(!sliceTop) sliceTop=upto;
   sliceP=db.collection('orders').where('createdAt','>=',iso).where('createdAt','<',upto).get().then(function(snap){
     const add=snap.docs.map(function(d){return d.data();}); readCount('tranche',add.length);
     const ids={}; ordersOlder.forEach(function(o){ids[o.id]=1;}); add.forEach(function(o){ if(!ids[o.id]) ordersOlder.push(o); });
     ordersLoadedFrom=iso; ordersMerge();
+    idbSet(sliceKey(),{ts:Date.now(),list:ordersOlder,from:iso,upto:sliceTop});
   }).catch(function(e){ if(e&&e.code==='resource-exhausted') quotaPauseSet(); });
   sliceP=sliceP.then(function(){ sliceP=null; });
   return sliceP;
@@ -6548,7 +6564,7 @@ function ensureOrdersSince(iso){
 
 function ordersCutoff(){ return new Date(Date.now()-ordersWindowDays()*86400000).toISOString(); }
 // fenêtre de commandes chargée à chaque ouverture : 14 jours pour ceux qui voient toutes les commandes (admin, comptable, conducteurs), 35 jours pour les autres (peu de commandes)
-function ordersWindowDays(){ return ownDataOnly()?ownerWindowDays():10; }
+function ordersWindowDays(){ return ownDataOnly()?ownerWindowDays():7; }
 
 // ===== TOTAUX « DEPUIS LE DÉBUT » : un petit compteur par personne, mis à jour à chaque commande (aucune relecture de l'historique) =====
 let totauxDoc=null, totauxUnsub=null, totauxInit=false;
@@ -6570,7 +6586,8 @@ function lecturesPush(force){
     const n=readTotal(); if(n===lecLast) return;
     if(!force&&Date.now()-lecAt<600000) return;
     lecLast=n; lecAt=Date.now();
-    const e={}, o={}; e[currentUser+'·'+lecDev()]={u:currentUser,n:n,d:new Date().toISOString().slice(0,10),at:new Date().toISOString()}; o.dev=e;
+    const e={}, o={}; let tg={}; try{ tg=JSON.parse(localStorage.getItem(readsKey())||'{}'); }catch(x){}
+    e[currentUser+'·'+lecDev()]={u:currentUser,n:n,d:new Date().toISOString().slice(0,10),at:new Date().toISOString(),t:tg}; o.dev=e;
     db.collection('meta').doc('lectures').set(o,{merge:true}).catch(function(){});
   }catch(e){}
 }
@@ -6583,12 +6600,12 @@ function openLectures(){
   db.collection('meta').doc('lectures').get().then(function(s){
     readCount('lectures',1);
     const today=new Date().toISOString().slice(0,10), dev=(s.exists&&s.data().dev)||{}, by={};
-    Object.keys(dev).forEach(function(k){ const x=dev[k]; if(x&&x.d===today){ by[x.u]=by[x.u]||{n:0,at:''}; by[x.u].n+=x.n||0; if((x.at||'')>by[x.u].at) by[x.u].at=x.at; } });
+    Object.keys(dev).forEach(function(k){ const x=dev[k]; if(x&&x.d===today){ by[x.u]=by[x.u]||{n:0,at:'',t:{}}; by[x.u].n+=x.n||0; Object.keys(x.t||{}).forEach(function(g){ by[x.u].t[g]=(by[x.u].t[g]||0)+x.t[g]; }); if((x.at||'')>by[x.u].at) by[x.u].at=x.at; } });
     const rows=Object.keys(by).sort(function(a,b){return by[b].n-by[a].n;});
     if(!rows.length){ infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="color:var(--muted);text-align:center;padding:24px">Aucun téléphone n\'a encore envoyé son compteur aujourd\'hui (il faut la nouvelle version ouverte quelques minutes).</p>'); return; }
     const max=by[rows[0]].n||1, tot=rows.reduce(function(t,k){return t+by[k].n;},0);
     infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Aujourd\'hui · '+tot.toLocaleString('fr-FR')+' lectures au total sur '+rows.length+' utilisateurs · limite 50 000 pour tous. Le compteur est envoyé toutes les 10 min ou quand l\'appli passe en arrière-plan.</p>'
-     +rows.map(function(k){ const v=by[k]; return '<div class="stats-bar-item"><div class="stats-bar-label" style="flex:1">'+editEsc(k)+'</div><div class="stats-bar-track" style="flex:1"><div class="stats-bar-fill" style="width:'+Math.round(v.n/max*100)+'%;background:'+(v.n>8000?'var(--red)':v.n>3000?'var(--orange)':'var(--green)')+'"></div></div><div class="stats-bar-val" style="min-width:64px">'+v.n.toLocaleString('fr-FR')+'</div></div>'; }).join('')+'<p style="font-size:0.74rem;color:var(--muted);margin-top:12px"><b>Détail de cet appareil (aujourd\'hui) :</b><br>'+(readDetail()||'—')+'</p>');
+     +rows.map(function(k){ const v=by[k]; return '<div class="stats-bar-item"><div class="stats-bar-label" style="flex:1">'+editEsc(k)+'</div><div class="stats-bar-track" style="flex:1"><div class="stats-bar-fill" style="width:'+Math.round(v.n/max*100)+'%;background:'+(v.n>8000?'var(--red)':v.n>3000?'var(--orange)':'var(--green)')+'"></div></div><div class="stats-bar-val" style="min-width:64px">'+v.n.toLocaleString('fr-FR')+'</div></div>'+(Object.keys(v.t).length?'<div style="font-size:0.68rem;color:var(--muted);margin:-4px 0 8px">'+Object.keys(v.t).sort(function(a,b){return v.t[b]-v.t[a];}).slice(0,5).map(function(g){return g+' '+v.t[g];}).join(' · ')+'</div>':''); }).join('')+'<p style="font-size:0.74rem;color:var(--muted);margin-top:12px"><b>Détail de cet appareil (aujourd\'hui) :</b><br>'+(readDetail()||'—')+'</p>');
   }).catch(function(){ infoModalOpen('📊 Lectures Firebase par utilisateur','<p style="color:var(--muted);text-align:center;padding:24px">Impossible de lire pour le moment (quota atteint ou règles Firebase).</p>'); });
 }
 // mise à jour d'un compteur (hors de la commande elle-même : une commande n'échoue jamais à cause des totaux)
@@ -7239,7 +7256,7 @@ let ordersReady={rec:false,pen:false};
 function stopOrderListeners(){
   ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
   if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
-  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null; newOrdSeen=null; ordersLoadedFrom=null; if(totauxUnsub){ try{totauxUnsub();}catch(e){} totauxUnsub=null; } totauxDoc=null;
+  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; sliceRestoredFlag=false; sliceTop=null; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null; newOrdSeen=null; ordersLoadedFrom=null; if(totauxUnsub){ try{totauxUnsub();}catch(e){} totauxUnsub=null; } totauxDoc=null;
 }
 function ordersMerge(){
   const m={}; ordersOlder.concat(ordersRes,ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
