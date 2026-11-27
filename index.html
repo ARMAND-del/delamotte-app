@@ -412,6 +412,7 @@ const db = firebase.firestore();
       <button class="btn-logout" onclick="doLogout()">&#8592;</button>
     </div>
   </div>
+  <div id="quotaBar" style="display:none;background:#fff3cd;color:#856404;text-align:center;padding:8px 12px;font-size:0.82rem;font-weight:700;"></div>
   <div id="offlineBar" style="display:none;background:#fdecea;color:#c0392b;text-align:center;padding:8px 12px;font-size:0.82rem;font-weight:700;">📶 Pas de réseau — vos commandes sont gardées et partiront dès le retour du réseau</div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-nav="catalogue" onclick="showTab('catalogue')">&#128230; Catalogue</button>
@@ -5978,10 +5979,12 @@ const MVT_TYPES={commande:'📦 Commande traitée',annulation:'↩️ Commande r
 function mvtNewId(){ return 'mv_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7); }
 function articleName(code){ const p=CATALOGUE.find(function(x){return x.code===code;})||customRefsCache.find(function(x){return x.code===code;}); return p?getEffectiveName(code,p.nom):''; }
 function mvtAdd(batch,m){
+  bilCacheClear();
   const id=mvtNewId();
   batch.set(db.collection('stock_mouvements').doc(id),{id:id,code:m.code,nom:m.nom||articleName(m.code),service:m.service,avant:m.avant,apres:m.apres,delta:m.apres-m.avant,type:m.type,ref:m.ref||'',comment:m.comment||'',user:currentUser,date:new Date().toISOString()});
 }
 function mvtSummary(batch,type,summary,details){
+  bilCacheClear();
   const id=mvtNewId();
   batch.set(db.collection('stock_mouvements').doc(id),{id:id,summaryDoc:true,type:type,summary:summary,details:details||[],service:'',user:currentUser,date:new Date().toISOString()});
 }
@@ -6225,7 +6228,16 @@ function costCompute(){
   return {range:R,nb:orders.length,total:total,svc:svcTot,rows:rows,months:Object.keys(months).sort().map(function(k){return {k:k,gros:months[k].gros,particulier:months[k].particulier};}),
     arts:Object.values(arts).sort(function(a,b){return b.cost-a.cost;}).slice(0,10),noPrice:{lines:noPrice.lines,codes:Object.keys(noPrice.codes)}};
 }
-function costEnsure(){ return costF.period==='month'?Promise.resolve():ensureAllOrders(); }   // « Ce mois » est déjà couvert par la fenêtre de 35 jours
+function costEnsure(){
+  if(ownDataOnly()) return costF.period==='month'?Promise.resolve():ensureAllOrders();
+  if(costF.period==='all') return ensureAllOrders();
+  const r=costRange(); if(!r.from) return ensureAllOrders();
+  const iso=new Date(r.from+'T00:00:00').toISOString();
+  if(iso>=ordersLoadedFrom||ordersAllLoaded) return Promise.resolve();
+  if(Date.now()-Date.parse(iso)>45*86400000&&!confirm('Cette période lit beaucoup de commandes (quota gratuit partagé de 50 000 lectures par jour). Continuer ?')) return Promise.resolve();
+  return ensureOrdersSince(iso);
+}
+
 function costSet(k,v){ costF[k]=v; costEnsure().then(renderCostSection); }
 function costToggle(i){ const el=document.getElementById('costDet_'+i); if(el) el.style.display=el.style.display==='none'?'table-row':'none'; }
 function renderCostSection(){
@@ -6366,7 +6378,7 @@ function notifyNow(title,body){
 }
 // seulement quand l'appli est en arrière-plan (au premier plan, le message à l'écran suffit)
 function sysNotify(title,body){
-  if(!('Notification' in window)||Notification.permission!=='granted'||!document.hidden) return;
+  if(!('Notification' in window)||Notification.permission!=='granted'||!document.hidden||notifOff()) return;
   notifyNow(title,body);
 }
 
@@ -6377,10 +6389,11 @@ function notifBarRender(){
   const what=currentRole==='admin'?'une commande arrive ou qu\'un message arrive':'une commande est traitée ou qu\'un message arrive';
   el.style.display='block';
   if(p==='default') el.innerHTML='<div style="background:#e8f4fd;'+box+'"><span>🔔 Être prévenu quand '+what+'</span><button class="btn-print" style="background:var(--blue)" onclick="notifEnable()">Activer</button></div>';
-  else if(p==='granted') el.innerHTML='<div style="background:#eafaf1;color:#1e8449;'+box+'"><span>🔔 Notifications activées — elles arrivent quand l\'appli est ouverte en arrière-plan (pas si elle est fermée)</span><button class="btn-print" style="background:#27ae60" onclick="notifTest()">Tester</button></div>';
+  else if(p==='granted'){ const off=notifOff(); el.innerHTML='<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:8px;font-size:0.75rem;color:var(--muted)"><span>'+(off?'🔕 Notifications désactivées':'🔔 Notifications activées')+'</span><button class="btn-print" style="background:'+(off?'var(--blue)':'#7f8c8d')+';padding:4px 10px;font-size:0.75rem" onclick="notifToggle()">'+(off?'Activer':'Désactiver')+'</button></div>'; }
   else el.innerHTML='<div style="background:#fdecea;color:#c0392b;'+box+'"><span>🔕 Notifications bloquées sur cet appareil : autorisez-les dans les réglages du navigateur (cadenas à côté de l\'adresse, ou réglages de l\'appli)</span></div>';
 }
-function notifTest(){ notifyNow('DELAMOTTE — test','Si vous voyez ce message, les notifications fonctionnent sur ce téléphone ✅'); showToast('🔔 Notification de test envoyée — regardez en haut de l’écran'); }
+function notifOff(){ try{ return localStorage.getItem('delamotte_notif_off')==='1'; }catch(e){ return false; } }
+function notifToggle(){ try{ if(notifOff()) localStorage.removeItem('delamotte_notif_off'); else localStorage.setItem('delamotte_notif_off','1'); }catch(e){} notifBarRender(); showToast(notifOff()?'🔕 Notifications désactivées sur cet appareil':'🔔 Notifications activées'); }
 
 function notifEnable(){ try{ Notification.requestPermission().then(function(p){ notifBarRender(); showToast(p==='granted'?'🔔 Notifications activées':'Notifications non activées'); }); }catch(e){} }
 // ===== RESTE À RECEVOIR : alerte au bout de 7 jours (rouge sur la commande, bandeau, filtre « À relancer », carte admin, message du jour) =====
@@ -6401,6 +6414,137 @@ function resteDailyAlert(){
   showToast('⏳ '+n+' commande'+(n>1?'s':'')+' : matériel à recevoir depuis plus de '+RESTE_ALERT_DAYS+' jours'+(currentRole==='admin'?' — pensez à relancer les fournisseurs':' — cliquez « Reçu » si c\'est arrivé'));
 }
 let hasResteFixed={};
+// ===== QUOTA FIREBASE : pause automatique, compteur de lectures, historique lu une seule fois par jour =====
+function quotaResetTs(){   // le quota gratuit se remet à zéro à minuit heure de Los Angeles (≈ 9 h en France) ; +5 min de marge
+  const now=new Date(), la=new Date(now.toLocaleString('en-US',{timeZone:'America/Los_Angeles'})), nx=new Date(la.getTime()); nx.setHours(24,5,0,0);
+  return now.getTime()+(nx.getTime()-la.getTime());
+}
+function quotaPaused(){ try{ return Date.now()<parseInt(localStorage.getItem('delamotte_quota_until')||'0'); }catch(e){ return false; } }
+function quotaPauseSet(){ try{ localStorage.setItem('delamotte_quota_until',String(quotaResetTs())); }catch(e){} quotaBarRender(); }
+function quotaPauseClear(){ try{ localStorage.removeItem('delamotte_quota_until'); }catch(e){} quotaBarRender(); }
+function quotaBarRender(){
+  const el=document.getElementById('quotaBar'); if(!el) return;
+  const on=quotaPaused(); el.style.display=on?'block':'none';
+  if(on) el.textContent='⚠️ Quota Firebase du jour atteint — reprise automatique vers '+new Date(parseInt(localStorage.getItem('delamotte_quota_until'))).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})+'. Les commandes envoyées sont gardées sur le téléphone et partiront toutes seules.';
+}
+setInterval(quotaBarRender,60000); setTimeout(quotaBarRender,0);
+function readsKey(){ return 'delamotte_reads_'+new Date().toISOString().slice(0,10); }
+function readCount(tag,n){
+  if(!n) return;
+  try{
+    const k=readsKey(), o=JSON.parse(localStorage.getItem(k)||'{}'); o[tag]=(o[tag]||0)+n; localStorage.setItem(k,JSON.stringify(o));
+    Object.keys(localStorage).forEach(function(x){ if(x.indexOf('delamotte_reads_')===0&&x!==k) localStorage.removeItem(x); });
+  }catch(e){}
+}
+function readTotal(){ try{ const o=JSON.parse(localStorage.getItem(readsKey())||'{}'); return Object.keys(o).reduce(function(s,k){return s+o[k];},0); }catch(e){ return 0; } }
+function readDetail(){ try{ const o=JSON.parse(localStorage.getItem(readsKey())||'{}'); return Object.keys(o).sort(function(a,b){return o[b]-o[a];}).map(function(k){return k+' '+o[k];}).join(' · '); }catch(e){ return ''; } }
+// petit stockage local durable (IndexedDB) pour mémoriser l'historique des commandes
+function idb(){ return new Promise(function(res,rej){ const r=indexedDB.open('delamotte',1); r.onupgradeneeded=function(){ r.result.createObjectStore('kv'); }; r.onsuccess=function(){res(r.result);}; r.onerror=function(){rej(r.error);}; }); }
+function idbGet(k){ return idb().then(function(d){ return new Promise(function(res){ const q=d.transaction('kv').objectStore('kv').get(k); q.onsuccess=function(){res(q.result||null);}; q.onerror=function(){res(null);}; }); }).catch(function(){return null;}); }
+function idbSet(k,v){ return idb().then(function(d){ return new Promise(function(res){ const t=d.transaction('kv','readwrite'); t.objectStore('kv').put(v,k); t.oncomplete=function(){res(true);}; t.onerror=function(){res(false);}; }); }).catch(function(){return false;}); }
+function idbDel(k){ return idb().then(function(d){ return new Promise(function(res){ const t=d.transaction('kv','readwrite'); t.objectStore('kv').delete(k); t.oncomplete=function(){res(true);}; t.onerror=function(){res(false);}; }); }).catch(function(){return false;}); }
+function histKey(){ return 'hist_'+(ownDataOnly()?currentUser:'ALL'); }
+function histCacheClear(){ idbDel(histKey()); }
+const HIST_TTL=24*3600*1000;
+let ordersLoadedFrom=null;
+// garde-fou : au-delà de 15 000 lectures sur cet appareil dans la journée, une fonction lourde demande confirmation
+function heavyGuard(what,est){
+  const n=readTotal(); if(n<15000) return true;
+  return confirm('Cet appareil a déjà lu '+n.toLocaleString('fr-FR')+' documents aujourd\'hui (limite gratuite : 50 000 pour tous les appareils).\n\n'+what+' va en lire '+est+' de plus. Continuer ?');
+}
+function ownerWindowDays(){ return 35; }
+// historique complet : lu UNE fois par jour et par appareil (puis mémorisé), jamais en direct
+let histP=null, sliceP=null;
+function ensureAllOrders(force,silent){
+  if(ordersAllLoaded&&!force) return Promise.resolve();
+  if(histP) return histP;   // un seul chargement à la fois
+  histP=ensureAllOrdersRun(force,silent).then(function(){ histP=null; },function(){ histP=null; });
+  return histP;
+}
+function ensureAllOrdersRun(force,silent){
+  if(ordersAllLoaded&&!force) return Promise.resolve();
+  const finish=function(list,ret){ ordersOlder=list; retoursOlder=ret||[]; ordersAllLoaded=true; ordersLoadedFrom='0'; ordersMerge(); updateOlderBox(); totauxRecalc(); };
+  return idbGet(histKey()).then(function(c){
+    if(c&&!force&&Date.now()-c.ts<HIST_TTL&&(ownDataOnly()||c.upto)){
+      // on ne relit que la tranche arrivée depuis l'enregistrement (quelques commandes), pas tout l'historique
+      const nowCut=ordersCutoff(), nowRetCut=new Date(Date.now()-RET_WINDOW_DAYS*86400000).toISOString();
+      if(ownDataOnly()||c.upto>=nowCut){ finish(c.list,c.ret); return; }
+      const retUp=c.retUpto||nowRetCut;
+      return Promise.all([db.collection('orders').where('createdAt','>=',c.upto).where('createdAt','<',nowCut).get(),db.collection('retours').where('createdAt','>=',retUp).where('createdAt','<',nowRetCut).get()]).then(function(g){
+        const ids={}, list=c.list.slice(); list.forEach(function(o){ids[o.id]=1;}); g[0].docs.forEach(function(d){ const o=d.data(); if(!ids[o.id]) list.push(o); });
+        const rid={}, ret=(c.ret||[]).slice(); ret.forEach(function(r){rid[r.id]=1;}); g[1].docs.forEach(function(d){ const r=d.data(); if(!rid[r.id]) ret.push(r); });
+        readCount('historique',g[0].docs.length+g[1].docs.length);
+        finish(list,ret); idbSet(histKey(),{ts:c.ts,list:list,ret:ret,upto:nowCut,retUpto:nowRetCut});
+      }).catch(function(){ finish(c.list,c.ret); });
+    }
+    if(quotaPaused()&&!force){ showToast('⏸️ Quota Firebase atteint : l\'historique sera disponible demain matin'); return; }
+    if(!silent&&!ownDataOnly()&&!confirm('Charger tout l\'historique des commandes ?\n\nCela lit plusieurs centaines de documents sur les 50 000 gratuits par jour, partagés par tout le monde. Ce chargement est mémorisé 24 h sur cet appareil.')) return;
+    if(!silent&&!heavyGuard('Le chargement de l\'historique','plusieurs centaines')) return;
+    const upto=(ordersLoadedFrom&&ordersLoadedFrom!=='0')?ordersLoadedFrom:ordersCutoff();   // on ne relit pas les tranches déjà chargées
+    const qo=ownDataOnly()?db.collection('orders').where('user','==',currentUser):db.collection('orders').where('createdAt','<',upto);
+    const qr=ownDataOnly()?Promise.resolve(null):db.collection('retours').where('createdAt','<',new Date(Date.now()-RET_WINDOW_DAYS*86400000).toISOString()).get();
+    return Promise.all([qo.get(),qr]).then(function(r){
+      const fresh=r[0].docs.map(function(d){return d.data();}), ret=r[1]?r[1].docs.map(function(d){return d.data();}):[];
+      readCount('historique',fresh.length+ret.length);
+      const ids={}, list=ordersOlder.slice(); list.forEach(function(o){ids[o.id]=1;}); fresh.forEach(function(o){ if(!ids[o.id]) list.push(o); });
+      finish(list,ret); idbSet(histKey(),{ts:Date.now(),list:list,ret:ret,upto:upto,retUpto:new Date(Date.now()-RET_WINDOW_DAYS*86400000).toISOString()});
+    }).catch(function(e){ if(e&&e.code==='resource-exhausted') quotaPauseSet(); showToast('❌ Historique non chargé : '+sendErrLabel(e)); });
+  });
+}
+
+function ensureOrdersSince(iso){
+  if(histP) return histP;
+  if(sliceP) return sliceP.then(function(){ return ensureOrdersSince(iso); });
+  if(ownDataOnly()||ordersAllLoaded||!ordersLoadedFrom||iso>=ordersLoadedFrom||quotaPaused()) return Promise.resolve();
+  if(!heavyGuard('Cette période','plusieurs dizaines à centaines')) return Promise.resolve();
+  const upto=ordersLoadedFrom;
+  sliceP=db.collection('orders').where('createdAt','>=',iso).where('createdAt','<',upto).get().then(function(snap){
+    const add=snap.docs.map(function(d){return d.data();}); readCount('tranche',add.length);
+    const ids={}; ordersOlder.forEach(function(o){ids[o.id]=1;}); add.forEach(function(o){ if(!ids[o.id]) ordersOlder.push(o); });
+    ordersLoadedFrom=iso; ordersMerge();
+  }).catch(function(e){ if(e&&e.code==='resource-exhausted') quotaPauseSet(); });
+  sliceP=sliceP.then(function(){ sliceP=null; });
+  return sliceP;
+}
+
+function ordersCutoff(){ return new Date(Date.now()-ordersWindowDays()*86400000).toISOString(); }
+// fenêtre de commandes chargée à chaque ouverture : 14 jours pour ceux qui voient toutes les commandes (admin, comptable, conducteurs), 35 jours pour les autres (peu de commandes)
+function ordersWindowDays(){ return ownDataOnly()?ownerWindowDays():10; }
+
+// ===== TOTAUX « DEPUIS LE DÉBUT » : un petit compteur par personne, mis à jour à chaque commande (aucune relecture de l'historique) =====
+let totauxDoc=null, totauxUnsub=null, totauxInit=false;
+function totauxFor(){
+  const d=totauxDoc; if(!d||!d.calcAt) return null;   // pas encore calculé
+  if(currentRole==='admin'||currentRole==='comptable') return d.all||0;
+  if(currentRole==='conducteur') return mySvcs().reduce(function(t,s){return t+((d.svc||{})[s]||0);},0);
+  return (d.users||{})[currentUser]||0;
+}
+function totauxCard(){ const n=totauxFor(); return n===null?'':'<div class="stat-card"><div class="stat-num" style="color:#8e44ad">'+n+'</div><div class="stat-label">Total depuis le début</div></div>'; }
+// mise à jour d'un compteur (hors de la commande elle-même : une commande n'échoue jamais à cause des totaux)
+function totauxAdd(user,svc,n){
+  try{
+    const FV=firebase.firestore.FieldValue, u={}, s={}; u[user]=FV.increment(n); s[svc]=FV.increment(n);
+    db.collection('meta').doc('totaux').set({all:FV.increment(n),users:u,svc:s},{merge:true}).catch(function(){});
+  }catch(e){}
+}
+function totauxListen(){
+  if(totauxUnsub){ try{totauxUnsub();}catch(e){} totauxUnsub=null; }
+  totauxDoc=null; totauxInit=false;
+  totauxUnsub=db.collection('meta').doc('totaux').onSnapshot(function(s){
+    readCount('totaux',1); totauxDoc=s.exists?s.data():null;
+    renderOrders(); if(currentRole==='admin') renderDashboard();
+    // première fois : l'admin calcule les totaux à partir de l'historique (une seule fois, sans rien demander)
+    if(currentRole==='admin'&&(!totauxDoc||!totauxDoc.calcAt)&&!totauxInit&&!quotaPaused()){ totauxInit=true; showToast('📊 Calcul des totaux « depuis le début » (une seule fois)…'); ensureAllOrders(false,true); }
+  },function(err){ if(err&&err.code==='resource-exhausted') quotaPauseSet(); });
+}
+// recalcul exact (admin) dès que l'historique complet est connu : corrige toute dérive éventuelle
+function totauxRecalc(){
+  if(currentRole!=='admin'||!ordersAllLoaded) return;
+  const all=getOrders().filter(function(o){return !o.deleted;}), users={}, svc={gros:0,particulier:0};
+  all.forEach(function(o){ users[o.user]=(users[o.user]||0)+1; const s=orderSvc(o); svc[s]=(svc[s]||0)+1; });
+  const d=totauxDoc||{}, same=d.calcAt&&d.all===all.length&&(d.svc||{}).gros===svc.gros&&(d.svc||{}).particulier===svc.particulier&&Object.keys(users).every(function(k){return (d.users||{})[k]===users[k];})&&Object.keys(d.users||{}).every(function(k){return users[k]===d.users[k];});
+  if(!same) db.collection('meta').doc('totaux').set({all:all.length,users:users,svc:svc,calcAt:new Date().toISOString()}).catch(function(){});
+}
 function showTab(tab){
   document.getElementById('tabCatalogue').style.display=tab==='catalogue'?'block':'none';
   document.getElementById('tabOrders').style.display=tab==='orders'?'block':'none';
@@ -6802,6 +6946,7 @@ function isNetErr(e){ return !!e&&(e.code==='unavailable'||e.code==='deadline-ex
 function sendErrLabel(e){
   const c=(e&&e.code)||'';
   try{ localStorage.setItem('delamotte_lasterr',JSON.stringify({code:c,msg:String((e&&e.message)||e).slice(0,200),at:new Date().toISOString()})); }catch(x){}
+  if(c==='resource-exhausted') quotaPauseSet();
   if(c==='permission-denied') return 'refusé par les règles de la base (permission-denied)';
   if(c==='resource-exhausted') return 'quota Firebase du jour dépassé (resource-exhausted)';
   return c||String((e&&e.message)||e).slice(0,60);
@@ -6815,22 +6960,21 @@ function outboxUpdateUI(){
   box.style.display='block';
   box.innerHTML=mine.map(function(p){
     const art=p.items.reduce(function(s,i){return s+(i.barres||i.qty);},0);
-    return '<div style="background:#fff3cd;color:#856404;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.82rem"><div style="font-weight:800">📶 En attente d\'envoi — '+editEsc(p.chantier)+'</div><div>'+p.items.length+' réf. · '+art+' art. · saisie le '+fmtDT(p.createdAt)+'</div>'
+    return '<div style="background:#fff3cd;color:#856404;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:0.82rem"><div style="font-weight:800">'+(p.held?'⏳ En attente de la base — envoi automatique dès qu\'elle répond':'📶 En attente d\'envoi')+' — '+editEsc(p.chantier)+'</div><div>'+p.items.length+' réf. · '+art+' art. · saisie le '+fmtDT(p.createdAt)+'</div>'
       +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn-print" style="background:#27ae60" onclick="outboxFlush(true)">📤 Envoyer maintenant</button><button class="btn-print" style="background:var(--red)" data-cid="'+p.cid+'" onclick="outboxDelete(this.dataset.cid)">🗑️ Supprimer</button></div></div>';
   }).join('');
 }
 function outboxDelete(cid){ if(!confirm('Supprimer cette commande en attente d\'envoi ?')) return; outboxSet(outboxGet().filter(function(x){return x.cid!==cid;})); }
-function orderEmail(id,p){
-  try{
-    emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
-      order_id:id,chantier:(p.service==='particulier'?'001 Particulier — ':'')+p.chantier,chef:p.chef,date:p.date,
-      articles:p.items.map(i=>i.barres?'- ['+i.code+'] '+i.nom+' x '+i.barres+' barre'+(i.barres>1?'s':'')+' ('+i.qty+'ml)':'- ['+i.code+'] '+i.nom+' x '+i.qty).join('\n'),
-      comment:p.comment||'(aucun)',total_articles:p.items.reduce((s,i)=>s+(i.barres||i.qty),0),
-      total_refs:p.items.length,to_email:EMAIL_MAGASIN
-    }).catch(()=>{});
-  }catch(e){}
+function orderEmailP(id,p,extra){
+  return emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
+    order_id:id,chantier:(p.service==='particulier'?'001 Particulier — ':'')+p.chantier,chef:p.chef,date:p.date,
+    articles:p.items.map(i=>i.barres?'- ['+i.code+'] '+i.nom+' x '+i.barres+' barre'+(i.barres>1?'s':'')+' ('+i.qty+'ml)':'- ['+i.code+'] '+i.nom+' x '+i.qty).join('\n'),
+    comment:((extra||'')+(p.comment||'')).trim()||'(aucun)',total_articles:p.items.reduce((s,i)=>s+(i.barres||i.qty),0),
+    total_refs:p.items.length,to_email:EMAIL_MAGASIN
+  });
 }
-// crée la commande ; une commande venant de la file d'attente vérifie d'abord qu'un envoi précédent n'a pas déjà abouti (aucun doublon)
+function orderEmail(id,p){ try{ orderEmailP(id,p).catch(()=>{}); }catch(e){} }
+
 function submitOrder(p){
   const cref=db.collection('meta').doc('counter'), kref=db.collection('order_cids').doc(p.cid);
   const build=function(id){
@@ -6882,7 +7026,7 @@ function submitOrder(p){
       });
     }catch(e){ step=Promise.reject(e); }
     return step.catch(function(e){ if(!hard(e)) throw e; return legacy(); })
-      .then(function(r){ if(!r.dup) orderEmail(r.id,p); return r.id; });
+      .then(function(r){ if(!r.dup){ orderEmail(r.id,p); totauxAdd(p.user,p.service,1); } return r.id; });
   };
   if(!p.queued) return create();
   // file d'attente : vérification supplémentaire pour les commandes créées avant l'introduction du ticket
@@ -6909,8 +7053,15 @@ function sendOrder(){
   sendingOrder=true;
   timer=setTimeout(queue,ORDER_SEND_TIMEOUT);   // réseau trop lent : on garde la commande plutôt que de laisser l'écran bloqué
   let pr; try{ pr=submitOrder(p); }catch(e){ pr=Promise.reject(e); }
-  pr.then(function(id){ if(finished) return; end(); showToast('Commande '+id+' envoyée !'); })
-    .catch(function(e){ if(finished) return; if(isNetErr(e)) queue(); else { sendingOrder=false; clearTimeout(timer); showToast('❌ Commande non envoyée : '+sendErrLabel(e)); } });
+  pr.then(function(id){ if(finished) return; end(); quotaPauseClear(); showToast('Commande '+id+' envoyée !'); })
+    .catch(function(e){
+      if(finished) return;
+      if(isNetErr(e)){ queue(); return; }
+      // la base refuse la commande (quota, règles…) : on la garde sur le téléphone, elle repartira toute seule dès que la base répond
+      const reason=sendErrLabel(e);
+      p.held=true; end(); outboxSet(outboxGet().concat([p]));
+      alert('⚠️ Commande NON enregistrée pour le moment\n\n'+(e&&e.code==='resource-exhausted'?'La base de l\'application a atteint son quota du jour (retour vers 09h05).':'La base refuse la commande ('+reason+').')+'\n\nVotre commande est GARDÉE sur ce téléphone et sera envoyée automatiquement dès que la base répond. Ne la ressaisissez pas.');
+    });
 }
 const TABID=Math.random().toString(36).slice(2), LOCK_KEY='delamotte_outbox_lock';
 function outboxLockRead(){ try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null');}catch(e){return null;} }
@@ -6929,6 +7080,7 @@ function outboxFlush(manual){
   }
   if(navigator.onLine===false){ if(manual===true) showToast('📶 Toujours pas de réseau'); return; }
   if(!outboxGet().length) return;
+  if(quotaPaused()&&manual!==true) return;   // quota atteint : on n'insiste pas avant la reprise
   if(!outboxLockTake()) return;   // une autre fenêtre de l'appli est déjà en train d'envoyer
   outboxBusy=true; outboxBusyAt=Date.now();
   setTimeout(function(){
@@ -7004,11 +7156,11 @@ function ownDataOnly(){ return currentRole==='chef'||currentRole==='particulier'
 const ORDERS_WINDOW_DAYS=35;
 let ordersRes=[], ordersRec=[], ordersPen=[], ordersOlder=[], ordersUnsubs=[], ordersOlderUnsub=null, ordersAllLoaded=false;
 let ordersReady={rec:false,pen:false};
-function ordersCutoff(){ return new Date(Date.now()-ORDERS_WINDOW_DAYS*86400000).toISOString(); }
+
 function stopOrderListeners(){
   ordersUnsubs.forEach(function(u){try{u();}catch(e){}}); ordersUnsubs=[];
   if(ordersOlderUnsub){try{ordersOlderUnsub();}catch(e){} ordersOlderUnsub=null;}
-  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null; newOrdSeen=null;
+  ordersRes=[]; ordersRec=[]; ordersPen=[]; ordersOlder=[]; ordersAllLoaded=false; ordersReady={rec:false,pen:false}; cmtSeen=null; doneSeenIds=null; newOrdSeen=null; ordersLoadedFrom=null; if(totauxUnsub){ try{totauxUnsub();}catch(e){} totauxUnsub=null; } totauxDoc=null;
 }
 function ordersMerge(){
   const m={}; ordersOlder.concat(ordersRes,ordersPen,ordersRec).forEach(function(o){m[o.id]=o;});
@@ -7041,8 +7193,9 @@ function ordersMerge(){
 }
 function listenOrders(){
   stopOrderListeners();
-  const cut=ordersCutoff();
-  const sub=function(q,assign,onErr,key){ return q.onSnapshot(function(snap){ assign(snap.docs.map(function(d){return d.data();})); if(key) ordersReady[key]=true; ordersMerge(); },onErr||function(){}); };
+  const cut=ordersCutoff(); ordersLoadedFrom=cut;
+  totauxListen();
+  const sub=function(q,assign,onErr,key){ return q.onSnapshot(function(snap){ readCount('commandes',snap.docChanges?snap.docChanges().length:snap.docs.length); assign(snap.docs.map(function(d){return d.data();})); if(key) ordersReady[key]=true; ordersMerge(); },function(err){ if(err&&err.code==='resource-exhausted') quotaPauseSet(); if(onErr) onErr(err); }); };
   if(ownDataOnly()){
     const base=db.collection('orders').where('user','==',currentUser);
     // récentes : nécessite un index composite (user + createdAt) ; tant qu'il n'existe pas, repli sur toutes les commandes de l'utilisateur
@@ -7056,16 +7209,14 @@ function listenOrders(){
   }
 }
 // charge l'historique complet (une seule fois par session) : statistiques, exports, anciennes commandes
-function ensureAllOrders(){
-  if(ordersAllLoaded) return Promise.resolve();
-  ordersAllLoaded=true;
-  return new Promise(function(res){
-    const q=ownDataOnly()?db.collection('orders').where('user','==',currentUser):db.collection('orders').where('createdAt','<',ordersCutoff());
-    let first=true;
-    ordersOlderUnsub=q.onSnapshot(function(snap){ ordersOlder=snap.docs.map(function(d){return d.data();}); ordersMerge(); updateOlderBox(); if(first){first=false;res();} },function(){ res(); });
-  });
+// (remplacé : voir bloc QUOTA FIREBASE)
+
+function updateOlderBox(){
+  const b=document.getElementById('olderOrdersBox'); if(!b) return;
+  b.style.display=ordersAllLoaded?'none':'block';
+  b.innerHTML=b.innerHTML.replace(/\d+ jours/g,ordersWindowDays()+' jours');
 }
-function updateOlderBox(){ const b=document.getElementById('olderOrdersBox'); if(b) b.style.display=ordersAllLoaded?'none':'block'; }
+
 function loadOlderOrders(){ showToast('Chargement de l\'historique...'); ensureAllOrders().then(function(){ updateOlderBox(); showToast('✅ Historique complet chargé'); }); }
 // Règles de visibilité :
 //  - admin et comptable : toutes les commandes
@@ -7094,9 +7245,7 @@ function renderOrders(){
   notifBarRender(); updateDoneBadge(); outboxUpdateUI(); lateBarRender();
   renderDashboard();
   document.getElementById('statsBar').innerHTML=`
-    <div class="stat-card"><div class="stat-num">${visW.length}</div><div class="stat-label">Total (35 j)</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`;
+    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>`+totauxCard();
   const lateN=resteLateList().length; if(orderFilter==='late'&&!lateN) orderFilter='all';
   document.getElementById('filterBar').innerHTML=['all','pending','done'].concat(lateN?['late']:[]).map(f=>`
     <button class="filter-btn${orderFilter===f?' active':''}" onclick="setFilter('${f}')">
@@ -7147,6 +7296,7 @@ function renderOrders(){
 function setFilter(f){orderFilter=f;renderOrders();}
 let pendingMarkDoneId=null;
 function reopenOrder(id){
+  histCacheClear();
   const o=getOrders().find(x=>x.id===id); if(!o) return;
   const ap=o.stockApplied||[];
   let msg='Remettre cette commande en attente ?';
@@ -7342,21 +7492,34 @@ let retourReceiveId=null;
 let retourReceiveState=null;   // {qty:[...], bad:{}}
 
 let retoursKnown=null;
+const RET_WINDOW_DAYS=45;
+let retRec=[], retPen=[], retUnsubs=[], retoursOlder=[], retReady={rec:false,pen:false};
+function retoursAll(){ const m={}; retoursOlder.concat(retoursCache).forEach(function(r){m[r.id]=r;}); return Object.keys(m).map(function(k){return m[k];}).filter(function(r){return !r.deleted;}); }
+function retMerge(){
+  if(!retReady.rec||(!ownDataOnly()&&!retReady.pen)) return;   // on attend les deux premiers chargements avant d'alerter
+  const m={}; retRec.concat(retPen).forEach(function(r){m[r.id]=r;});
+  retoursCache=Object.keys(m).map(function(k){return m[k];}).filter(function(r){return !r.deleted;});
+  retoursCache.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
+  // alerte du magasin : un nouveau bon de retour vient d'arriver (jamais au premier chargement)
+  if(retoursKnown!==null&&currentRole==='admin'){
+    const fresh=retoursCache.filter(function(r){return r.status==='pending'&&retoursKnown.indexOf(r.id)===-1&&r.user!==currentUser;});
+    if(fresh.length) showToast('↩️ Nouveau bon de retour '+fresh[0].id+' — '+fresh[0].chantier+(fresh.length>1?' (+'+(fresh.length-1)+')':''));
+  }
+  retoursKnown=retoursCache.map(function(r){return r.id;});
+  updateRetoursBadge();
+  const mo=document.getElementById('retoursListModal');
+  if(mo&&mo.style.display==='flex') renderRetoursList();
+}
 function listenRetours(){
-  retoursKnown=null;
-  (ownDataOnly()?db.collection('retours').where('user','==',currentUser):db.collection('retours')).onSnapshot(function(snap){
-    retoursCache=snap.docs.map(function(d){return d.data();}).filter(function(r){return !r.deleted;});
-    retoursCache.sort(function(a,b){return String(b.createdAt||'').localeCompare(String(a.createdAt||''));});
-    // alerte du magasin : un nouveau bon de retour vient d'arriver (jamais au premier chargement)
-    if(retoursKnown!==null&&currentRole==='admin'){
-      const fresh=retoursCache.filter(function(r){return r.status==='pending'&&retoursKnown.indexOf(r.id)===-1&&r.user!==currentUser;});
-      if(fresh.length) showToast('↩️ Nouveau bon de retour '+fresh[0].id+' — '+fresh[0].chantier+(fresh.length>1?' (+'+(fresh.length-1)+')':''));
-    }
-    retoursKnown=retoursCache.map(function(r){return r.id;});
-    updateRetoursBadge();
-    const m=document.getElementById('retoursListModal');
-    if(m&&m.style.display==='flex') renderRetoursList();
-  });
+  retoursKnown=null; retUnsubs.forEach(function(u){ try{u();}catch(e){} }); retUnsubs=[]; retRec=[]; retPen=[]; retoursOlder=[]; retReady={rec:false,pen:false};
+  const col=db.collection('retours');
+  const sub=function(q,key,assign){ return q.onSnapshot(function(snap){ readCount('retours',snap.docChanges?snap.docChanges().length:snap.docs.length); assign(snap.docs.map(function(d){return d.data();})); retReady[key]=true; retMerge(); },function(err){ if(err&&err.code==='resource-exhausted') quotaPauseSet(); }); };
+  if(ownDataOnly()) retUnsubs.push(sub(col.where('user','==',currentUser),'rec',function(a){retRec=a;}));
+  else{
+    const cut=new Date(Date.now()-RET_WINDOW_DAYS*86400000).toISOString();
+    retUnsubs.push(sub(col.where('createdAt','>=',cut),'rec',function(a){retRec=a;}));
+    retUnsubs.push(sub(col.where('status','==','pending'),'pen',function(a){retPen=a;}));
+  }
 }
 
 function retoursVisibles(){
@@ -7787,6 +7950,7 @@ function generateBonFournisseurItems(order, items){
   XLSX.writeFile(wb,filename);
 }
 function deleteOrder(id){
+  histCacheClear();
   const o=getOrders().find(x=>x.id===id);
   const ap=(o&&o.stockApplied)||[];
   let msg='Mettre à la corbeille ?';
@@ -7796,7 +7960,7 @@ function deleteOrder(id){
   const batch=db.batch(), upd={deleted:true, deletedAt:new Date().toISOString()};
   if(o&&o.status==='done'&&ap.length){ undoOrderInto(batch,o,'annulation','Commande '+id+' mise à la corbeille'); Object.assign(upd,{status:'pending',dateLivraison:'',dateLivraisonISO:'',stockApplied:null,stockService:null,reste:null,hasReste:false}); }
   batch.update(db.collection('orders').doc(id),upd);
-  batch.commit().then(()=>showToast('Commande mise à la corbeille 🗑️'))
+  batch.commit().then(()=>{ showToast('Commande mise à la corbeille 🗑️'); if(o) totauxAdd(o.user,orderSvc(o),-1); })
     .catch(()=>showToast('❌ Non enregistré : rien n\'a été modifié'));
 }
 
@@ -7835,9 +7999,13 @@ function renderCorbeille(){
 }
 function restaurerOrder(id){
   db.collection('orders').doc(id).update({deleted:false,deletedAt:null})
-    .then(()=>{showToast('Commande restaurée ✅');renderCorbeille();})
+    .then(()=>{
+      showToast('Commande restaurée ✅'); renderCorbeille();
+      db.collection('orders').doc(id).get().then(function(s){ if(s.exists){ const o=s.data(); totauxAdd(o.user,orderSvc(o),1); } }).catch(function(){});
+    })
     .catch(()=>showToast('Erreur'));
 }
+
 function supprimerDefinitif(id){
   if(!confirm('Supprimer définitivement ? Cette action est irréversible.'))return;
   db.collection('orders').doc(id).delete()
@@ -7846,10 +8014,10 @@ function supprimerDefinitif(id){
 }
 function viderCorbeille(){
   if(!confirm('Vider toute la corbeille ? Cette action est irréversible.'))return;
-  db.collection('orders').get()
+  db.collection('orders').where('deleted','==',true).get()
     .then(snap=>{
       const batch=db.batch();
-      snap.docs.filter(d=>d.data().deleted===true).forEach(d=>batch.delete(d.ref));
+      snap.docs.forEach(d=>batch.delete(d.ref));
       return batch.commit();
     })
     .then(()=>{showToast('Corbeille vidée');renderCorbeille();})
@@ -7902,8 +8070,7 @@ function renderDashboard(){
   const al=function(svc,n){return '<div class="stat-card" onclick="openStockAlerts(\''+svc+'\')" style="cursor:pointer"><div class="stat-num" style="color:'+(n?'var(--red)':'var(--green)')+'">'+n+'</div><div class="stat-label">📦 Stock bas</div></div>';};
   document.getElementById('dashboardGrid').innerHTML=`
     <div class="stat-card"><div class="stat-num" style="color:var(--blue)">${todayOrders.length}</div><div class="stat-label">Aujourd'hui</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--green)">${done}</div><div class="stat-label">Traitées (35 j)</div></div>`+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+al('gros',aG);
+    <div class="stat-card"><div class="stat-num" style="color:var(--orange)">${pending}</div><div class="stat-label">En attente</div></div>`+totauxCard()+'<div class="stat-card" onclick="showTab(\'orders\');setFilter(\'late\')" style="cursor:pointer"><div class="stat-num" style="color:'+(lateAll?'var(--red)':'var(--green)')+'">'+lateAll+'</div><div class="stat-label">⏳ Reste &gt; '+RESTE_ALERT_DAYS+' j</div></div>'+'<div class="stat-card" title="'+readDetail().replace(/"/g,'')+'"><div class="stat-num" style="color:'+(readTotal()>20000?'var(--red)':readTotal()>8000?'var(--orange)':'var(--green)')+'">'+readTotal().toLocaleString('fr-FR')+'</div><div class="stat-label">📊 Lectures Firebase aujourd\'hui<br><span style="font-size:0.66rem">(cet appareil — limite 50 000 pour tous)</span></div></div>';
 }
 
 function clearDateFilter(){
@@ -8239,6 +8406,7 @@ function renderReappro(){
 
 // Passer commande fournisseur → sauvegarde dans Firebase + export Excel
 function passerCommandeFourn(fourn, batigestId){
+  idbDel('histcmd'); artHistDocs=null;
   const batigest=document.getElementById(batigestId)?.value.trim()||'';
   if(!batigest){showToast('Saisissez le numéro Batigest avant de passer la commande');return;}
   const data=buildReapproData();
@@ -8409,6 +8577,7 @@ function reapproConsume(ex,q){
   return {totalQty:Math.max(0,(ex.totalQty||0)-q),chantiers:ch,services:sv};
 }
 function confirmReception(){
+  idbDel('histcmd'); artHistDocs=null;
   if(!pendingReceptionData) return;
   const batch=db.batch();
   let count=0,reliquats=0;
@@ -8905,11 +9074,6 @@ function listenStock(){
     // Refresh catalogue to update badges
     buildCatalogue();
     renderDashboard();
-    if(currentRole==='admin'&&!stockAlertToasted){
-      stockAlertToasted=true;
-      const g=stockAlertList('gros').length;
-      if(g>0) showToast('⚠️ Stock bas : '+g+' article(s)');
-    }
   });
 }
 function deductStockFromOrder(order){
@@ -9167,7 +9331,7 @@ function artConso(){
     });
   });
   // retours de chantier traités : quantités remises en stock (même unité que les commandes : mètres pour une barre)
-  (retoursCache||[]).filter(function(r){return r.status==='received'&&!r.deleted;}).forEach(function(r){
+  retoursAll().filter(function(r){return r.status==='received'&&!r.deleted;}).forEach(function(r){
     const mk=String(r.receivedAt||r.createdAt||'').slice(0,7); if(!/^\d{4}-\d{2}$/.test(mk)) return;
     years[mk.slice(0,4)]=1;
     (r.receivedItems||[]).forEach(function(li){
@@ -9226,14 +9390,60 @@ function artRenderBil(){
   artBilLoad();
 }
 // lit le journal des mouvements depuis le début de la période (une seule requête)
+function bilCacheClear(){ /* plus nécessaire : le bilan relit toujours les nouveaux mouvements */ }
+// ===== BILAN : le journal est mémorisé sur l'appareil ; à chaque ouverture on ne relit que les NOUVEAUX mouvements =====
+const MV_CAP=1500, MV_OVERLAP=10*60*1000, MV_REBUILD=7*24*3600*1000;
+function mvKey(m){ return m.id||(m.date+'|'+m.code+'|'+m.type+'|'+m.delta+'|'+(m.ref||'')); }
+function mvMerge(list,add){ const seen={}; list.forEach(function(m){seen[mvKey(m)]=m;}); add.forEach(function(m){seen[mvKey(m)]=m;}); return Object.keys(seen).map(function(k){return seen[k];}); }
+function mvMax(list,def){ return list.reduce(function(mx,m){return String(m.date)>mx?String(m.date):mx;},def); }
+// un seul chargement du bilan à la fois (si on change vite de période, le dernier choix est servi après)
+let artBilBusy=false, artBilAgain=false;
 function artBilLoad(){
+  if(artBilBusy){ artBilAgain=true; return; }
+  artBilBusy=true;
+  const done=function(){ artBilBusy=false; if(artBilAgain){ artBilAgain=false; artBilLoad(); } };
+  let p; try{ p=artBilLoadRun(); }catch(e){ p=null; }
+  Promise.resolve(p).then(done,done);
+}
+function artBilLoadRun(){
   const R=artBilRange(), el=document.getElementById('artBilBody'); if(!el) return;
   el.innerHTML='<p style="text-align:center;color:var(--muted);padding:24px">Chargement du journal des mouvements...</p>';
-  db.collection('stock_mouvements').where('date','>=',R.s).orderBy('date','desc').limit(6000).get().then(function(snap){
-    artBilCache={start:R.s,rows:snap.docs.map(function(d){return d.data();}),full:snap.docs.length<6000};
-    artBilBody();
-  }).catch(function(){ el.innerHTML='<p style="color:var(--red);text-align:center;padding:24px">Erreur de chargement du journal</p>'; });
+  const col=db.collection('stock_mouvements');
+  const show=function(list,minD){ artBilCache={start:R.s,rows:list.filter(function(m){return String(m.date)>=R.s;}),full:minD<=R.s}; artBilBody(); };
+  idbGet('mv_cache').then(function(c){
+    if(c&&Date.now()-c.built>MV_REBUILD) c=null;   // reconstruction complète une fois par semaine (sécurité)
+    if(quotaPaused()){ if(c){ show(c.list,c.minDate); } else el.innerHTML='<p style="text-align:center;color:var(--muted);padding:24px">⏸️ Quota Firebase atteint : le bilan sera disponible demain matin.</p>'; return; }
+    let list=c?c.list:[], minD=c?c.minDate:null, built=c?c.built:Date.now();
+    // 1) le bas de la période n'est pas encore en mémoire : on lit seulement la partie manquante
+    let low=Promise.resolve();
+    if(!c||R.s<minD){
+      if(!heavyGuard('Le bilan du stock','jusqu\'à '+MV_CAP)){ el.innerHTML='<p style="text-align:center;color:var(--muted);padding:24px">Chargement annulé.</p>'; return; }
+      let q=col.where('date','>=',R.s); if(c) q=q.where('date','<',minD);
+      low=q.orderBy('date','desc').limit(MV_CAP).get().then(function(s){
+        const add=s.docs.map(function(d){return d.data();}); readCount('bilan',add.length);
+        list=mvMerge(list,add); minD=(add.length>=MV_CAP)?String(add[add.length-1].date):R.s;
+      });
+    }
+    // 2) le haut : seulement les mouvements arrivés depuis la dernière ouverture (marge de 10 min pour les horloges)
+    return low.then(function(){
+      const from=c?new Date(Date.parse(c.maxDate)-MV_OVERLAP).toISOString():null;
+      if(!from) return;
+      const more=function(after,n){
+        let q=col.where('date','>=',from).orderBy('date','asc').limit(MV_CAP); if(after) q=q.startAfter(after);
+        return q.get().then(function(s){
+          const add=s.docs.map(function(d){return d.data();}); readCount('bilan',add.length); list=mvMerge(list,add);
+          if(s.docs.length>=MV_CAP&&n<5) return more(s.docs[s.docs.length-1],n+1);
+        });
+      };
+      return more(null,0);
+    }).then(function(){
+      const maxD=mvMax(list,R.s);
+      idbSet('mv_cache',{built:built,minDate:minD,maxDate:maxD,list:list});
+      show(list,minD);
+    });
+  }).catch(function(e){ if(e&&e.code==='resource-exhausted') quotaPauseSet(); el.innerHTML='<p style="color:var(--red);text-align:center;padding:24px">Erreur de chargement du journal</p>'; });
 }
+
 function artBilCompute(rows,startISO,endISO){
   const ev={}, map={reception:'ent',retour:'ret',annulretour:'ret',commande:'sor',annulation:'sor',inventaire:'cor'};
   const add=function(code,k,delta,date){
@@ -9282,7 +9492,7 @@ function artBilBody(){
     +'<div class="stat-card"><div class="stat-num" style="font-size:1.35rem;color:var(--red)">'+rupt+'</div><div class="stat-label">❌ Ruptures</div></div></div>'
     +'<div class="art-card"><h4>Mouvements — '+R.label+'</h4>'
     +'<div class="inv-stats">'+card('🚚','Réceptions',sum('ent')?'+'+artQty(sum('ent')):'0',fmtEur(val('ent')),'art-down')+card('↩️','Retours de chantier',sum('ret')?'+'+artQty(sum('ret')):'0',fmtEur(val('ret')),'art-down')+card('📦','Sorties (commandes)',sum('sor')?'−'+artQty(sum('sor')):'0',fmtEur(val('sor')),'art-up')+card('✏️','Corrections','' +sg(sum('cor')),'inventaire et synchro','')+'</div>'
-    +'<div style="font-size:0.78rem;color:var(--muted);margin-top:8px">Stock fin = stock début + réceptions + retours − sorties ± corrections. Valeurs au prix actuel.'+(artBilCache.full?'':' ⚠️ Période très longue : seuls les 6 000 mouvements les plus récents sont lus.')+'</div></div>'
+    +'<div style="font-size:0.78rem;color:var(--muted);margin-top:8px">Stock fin = stock début + réceptions + retours − sorties ± corrections. Valeurs au prix actuel.'+(artBilCache.full?'':' ⚠️ Période très longue : seuls les 1 500 mouvements les plus récents sont lus (pour ménager le quota).')+'</div></div>'
     +'<div class="art-card"><div style="font-size:0.82rem;margin-bottom:8px"><b>'+rows.length+'</b> article(s) avec mouvement'+(rows.length>400?' · les 400 premiers affichés (l\'export les contient tous)':'')+'</div>'
     +(rows.length?'<div style="overflow-x:auto"><table class="art-table"><thead><tr><th>Code</th><th style="text-align:left">Désignation</th><th>Début</th><th>Réceptions</th><th>Retours</th><th>Sorties</th><th>Corrections</th><th>Fin</th></tr></thead><tbody>'
       +shown.map(function(r){ return '<tr onclick="artOpen(this.dataset.code)" data-code="'+r.code+'" style="cursor:pointer"><td>'+r.code+'</td><td class="wrap">'+editEsc(r.nom)+'</td><td>'+artQty(r.deb)+'</td><td'+(r.ent?' class="art-down"':' style="color:var(--muted)"')+'>'+(r.ent?'+'+artQty(r.ent):'·')+'</td><td'+(r.ret?' class="art-down"':' style="color:var(--muted)"')+'>'+(r.ret?'+'+artQty(r.ret):'·')+'</td><td'+(r.sor?' class="art-up"':' style="color:var(--muted)"')+'>'+(r.sor?'−'+artQty(r.sor):'·')+'</td><td'+(r.cor?'':' style="color:var(--muted)"')+'>'+(r.cor?sg(r.cor):'·')+'</td><td><b>'+artQty(r.fin)+'</b></td></tr>'; }).join('')+'</tbody></table></div>'
@@ -9493,8 +9703,13 @@ function artLoadPrix(){
 }
 function artLoadHist(){
   if(artHistDocs) return Promise.resolve(artHistDocs);
-  return db.collection('historique_commandes').get().then(function(s){ artHistDocs=s.docs.map(function(d){return d.data();}); return artHistDocs; }).catch(function(){ artHistDocs=[]; return artHistDocs; });
+  return idbGet('histcmd').then(function(c){
+    if(c&&Date.now()-c.ts<HIST_TTL){ artHistDocs=c.list; return artHistDocs; }
+    if(!heavyGuard('La fiche article','plusieurs centaines')) { artHistDocs=[]; return artHistDocs; }
+    return db.collection('historique_commandes').get().then(function(s){ artHistDocs=s.docs.map(function(d){return d.data();}); readCount('fournisseurs',artHistDocs.length); idbSet('histcmd',{ts:Date.now(),list:artHistDocs}); return artHistDocs; }).catch(function(){ artHistDocs=[]; return artHistDocs; });
+  });
 }
+
 function artLoadMvt(code){
   return db.collection('stock_mouvements').where('code','==',code).get().then(function(s){
     return s.docs.map(function(d){return d.data();}).filter(function(m){return !m.summaryDoc;}).sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
